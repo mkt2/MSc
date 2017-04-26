@@ -7,12 +7,27 @@ import dbg, Bloom, Graph, helpers
 #	fn: a list of fastq files containing reads
 #returns all substrings from segments whose kmers we've seen 2 or more times
 #(with a false positive rate of p)
-def generateSegmentsFrom_fq(fn,k,BF,pfn=False,printProgress=False,startAtLine=0):
+#whatToRun=0: Keyra BF_counter_naive
+#whatToRun=1: Keyra BF_counter
+def geraAllt(fn,k,BF,G,pfn=False,printProgress=False,startAtLine=0,sizeOfGenome=-1,whatToRun=1):
 	if pfn:
 		print "generateSegments_from_fastq(fn="+str(fn)+", k="+str(k)+", BF, pfn="+str(pfn)+", printProgress="+str(printProgress)+", startAtLine="+str(startAtLine)+")"
 	if not isinstance(fn, list):
 		print "fn:",fn
 		raise Exception('fn has to be a list')
+	#Open the file and get ready for gathering data for the Figures
+	if sizeOfGenome==-1:
+		sizeOfGenome = 70000
+	sampleDensity, readsPerLine = getInfoFromInputFile(fn,sizeOfGenome)
+	lineNumber = [0]
+	cov = [0]
+	kmersInGraph = [0]
+	kmersInBF = [0]
+	G_ratio = [0]
+	BF_ratio = [0]
+	count = 0
+	kmersInGenome = helpers.createKmerDictFrom_fa("Input/t/t.fa",k)
+	count = 0
 	for f in fn:
 		h = open(f, "rU")
 		for lineNr,line in enumerate(h,start=startAtLine):
@@ -22,6 +37,8 @@ def generateSegmentsFrom_fq(fn,k,BF,pfn=False,printProgress=False,startAtLine=0)
 					if not isinstance(s, basestring):
 						print "s:",s
 						raise Exception('Each segment has to be a string')
+
+					#Prentum út stöðuna annað slagið:
 					if printProgress and (lineNr%5000==1):
 						print "We are reading the segment from line "+str(lineNr)+" from the file "+str(f)
 						if lineNr%40000==1:
@@ -31,6 +48,9 @@ def generateSegmentsFrom_fq(fn,k,BF,pfn=False,printProgress=False,startAtLine=0)
 								print "The BF is not full. Ratio="+str(ratio)
 							else:
 								print "The BF is full. Ratio="+str(ratio)
+					#Bætum öllum k-merum úr s við BF
+					#Bætum öllum k-merum úr s sem við höfum séð tvisvar eða 
+					#oftar við G (bætum segmenti sem inniheldur k-mera)
 					L = len(s)
 					start = 0
 					for i, kmer in enumerate(dbg.kmers(s,k)):
@@ -40,14 +60,52 @@ def generateSegmentsFrom_fq(fn,k,BF,pfn=False,printProgress=False,startAtLine=0)
 							BF.add(dbg.twin(kmer))
 							if i-start>0:
 								assert len(s[start:i+k-1])>=k
-								yield s[start:i+k-1],lineNr
+								#yield s[start:i+k-1],lineNr
+								G.addSegmentToGraph(s)
 							start = i+1
-
 					#If we reach the end of segment we add the current sequence
 					if L-start>=k:
 						assert len(s[start:])>=k
-						yield s[start:],lineNr
+						#yield s[start:],lineNr
+						G.addSegmentToGraph(s)
 
+					#á "sampleDensity" segmenta fresti þá mælum við fjölda k-mera í
+					#G og BF ásamt coverage og geymum niðurstöðurnar
+					if count%sampleDensity==0:
+						print "count%sampleDensity==0. sampleDensity="+str(sampleDensity)+", count="+str(count)
+						#cov = numberOfReads*readsPerLine/sizeOfGenome
+						lineNumber.append(lineNr)
+						cov.append(int(count/2) * readsPerLine / sizeOfGenome)
+						kmersInGraph.append(len(G))
+						kmersInBF.append(len(BF))
+						g,b = helpers.ratioInGenome(kmersInGenome,G,BF)
+						G_ratio.append(g)
+						BF_ratio.append(b)
+				count += 1
+		#Geymum einnig niðurstöðurnar í lokin
+		lineNumber.append(lineNr)
+		cov.append(int(count/2) * readsPerLine / sizeOfGenome)
+		kmersInGraph.append(len(G))
+		kmersInBF.append(len(BF))
+		g,b = helpers.ratioInGenome(kmersInGenome,G,BF)
+		G_ratio.append(g)
+		BF_ratio.append(b)
+	#Prentum niðurstöðurnar í skrá sem við getum notað síðar til að búa til mynd
+	printFigureFile(lineNumber,cov,kmersInGraph,kmersInBF)
+	printFigureFile2(lineNumber,cov,G_ratio,BF_ratio)
+			
+
+
+#fn:			A list of 1 or more .fastq files
+#					fn = [file1.fastq, file2.fastq, ...]
+#BF:			Bloom filter
+#k:				kmer length
+#G:				Graph
+#startAtLine:	The first line in the input file we read from 
+#				Useful when we have already read the earlier lines from the
+#				file and want to continue from there instead of starting over
+def BF_counter(fn,BF,k,G,pfn=False,printProgress=False,startAtLine=0,sizeOfGenome=-1):
+	geraAllt(fn,k,BF,G,pfn,printProgress,startAtLine,sizeOfGenome,whatToRun=1)
 
 def BF_counter_naive(fn,BF,k,G_naive,pfn=True,printProgress=False):
 	if pfn:
@@ -106,82 +164,26 @@ def getInfoFromInputFile(fn,sizeOfGenome):
 	return sampleDensity, readsPerLine
 
 def printFigureFile(lineNumber,cov,kmersInGraph,kmersInBF):
+	print "printFigureFile(lineNumber,cov,kmersInGraph,kmersInBF)"
 	h = open("Output/defaultOutFolder/figureData.csv","w")
-	print lineNumber
-	print cov
-	print kmersInGraph
-	print kmersInBF
+	#print lineNumber
+	#print cov
+	#print kmersInGraph
+	#print kmersInBF
 	for i in xrange(0,len(cov)):
 		h.write(str(lineNumber[i])+","+str(cov[i])+","+str(kmersInGraph[i])+","+str(kmersInBF[i])+"\n")
 	h.close()
 
 def printFigureFile2(lineNumber,cov,G_ratio,BF_ratio):
+	print "printFigureFile2(lineNumber,cov,G_ratio,BF_ratio)"
 	h = open("Output/defaultOutFolder/figureData2.csv","w")
-	print lineNumber
-	print cov
-	print G_ratio
-	print BF_ratio
+	#print lineNumber
+	#print cov
+	#print G_ratio
+	#print BF_ratio
 	for i in xrange(0,len(cov)):
 		h.write(str(lineNumber[i])+","+str(cov[i])+","+str(G_ratio[i])+","+str(BF_ratio[i])+"\n")
 	h.close()
-
-#fn:			A list of 1 or more .fastq files
-#					fn = [file1.fastq, file2.fastq, ...]
-#BF:			Bloom filter
-#k:				kmer length
-#G:				Graph
-#startAtLine:	The first line in the input file we read from 
-#				Useful when we have already read the earlier lines from the
-#				file and want to continue from there instead of starting over
-def BF_counter(fn,BF,k,G,pfn=False,printProgress=False,startAtLine=0,sizeOfGenome=-1):
-	if pfn:
-		print "BF_counter(fn, BF, k="+str(k)+", G, printProgress="+str(printProgress)+", pfn="+str(pfn)+", startAtLine="+str(startAtLine)+")"
-	#Open the file and get ready for gathering data for the Figures
-	if sizeOfGenome==-1:
-		sizeOfGenome = 70000
-	sampleDensity, readsPerLine = getInfoFromInputFile(fn,sizeOfGenome)
-	lineNumber = [0]
-	cov = [0]
-	kmersInGraph = [0]
-	kmersInBF = [0]
-	G_ratio = [0]
-	BF_ratio = [0]
-	try:			
-		count = 0
-		kmersInGenome = helpers.createKmerDictFrom_fa("Input/t/t.fa",k)
-		for segment, lineNr in generateSegmentsFrom_fq(fn,k,BF,pfn,printProgress,startAtLine):
-			if count%sampleDensity==0:
-				#cov = numberOfReads*readsPerLine/sizeOfGenome
-				lineNumber.append(lineNr)
-				cov.append(int(count/2) * readsPerLine / sizeOfGenome)
-				kmersInGraph.append(len(G))
-				kmersInBF.append(len(BF))
-				g,b = helpers.ratioInGenome(kmersInGenome,G,BF)
-				G_ratio.append(g)
-				BF_ratio.append(b)
-			G.addSegmentToGraph(segment)
-			count+=1
-		lineNumber.append(lineNr)
-		cov.append(int(count/2) * readsPerLine / sizeOfGenome)
-		kmersInGraph.append(len(G))
-		kmersInBF.append(len(BF))
-		g,b = helpers.ratioInGenome(kmersInGenome,G,BF)
-		G_ratio.append(g)
-		BF_ratio.append(b)
-		printFigureFile(lineNumber,cov,kmersInGraph,kmersInBF)
-		printFigureFile2(lineNumber,cov,G_ratio,BF_ratio)
-		#print "G_ratio:",G_ratio
-		#print "BF_ratio",BF_ratio
-	except KeyboardInterrupt:
-		print '\nYou have pressed ctrl+c inside BF_counter.'
-		G.printIsLegal = True
-		if not G.isLegalDBG():
-			print "We won't overwrite because the Graph isn't legal"
-			helpers.printResultsToFile(BF,G,"BF_counter_KeyboardInterrupt_not_legal",timeInSeconds=-1,nextLine=lineNr)
-			print "We were about to add the segment in line nr "+str(lineNr)+" from the input file\n"
-		else:
-			helpers.printResultsToFile(BF,G,"BF_counter_KeyboardInterrupt",timeInSeconds=-1,nextLine=lineNr)
-			print "We were about to add the segment in line nr "+str(lineNr)+" from the input file\n"
 
 def BF_counter_and_naive(fn,BF,k,G,G_naive,printProgress=False,pfn=False):
 	if pfn:

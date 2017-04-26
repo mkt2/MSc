@@ -61,8 +61,8 @@ def readInput():
 if __name__ == '__main__':
     #command line syntax:
     #python simData.py k       read1           read2      numberOfKmers whatToRead [pfn] [printProgress] [startAtLine] [fileName]
-    #python simData.py 31 Input/t/r1.fastq Input/t/r2.fastq 6000000 0
-    #python simData.py 31 Input/t/r1.fastq Input/t/r2.fastq 6000000 0 False False 0 BF_counter_KeyboardInterrupt/G.txt
+    #python simData.py 31 Input/t/r1.fastq Input/t/r2.fastq 6000000 1
+    #python simData.py 31 Input/t/r1.fastq Input/t/r2.fastq 6000000 1 False False 0 BF_counter_KeyboardInterrupt/G.txt
     start = time.time()
     k,fn,numberOfKmers,whatToRun,pfn,printProgress,startAtLine,fileName = readInput()
 

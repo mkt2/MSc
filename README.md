@@ -1,4 +1,3 @@
-# Project-hack
-This repository will contain code related to my MS project.
+#MSc
+This repository contains the code from my MSc project.
 
-For now I'll mostly be testing out ideas, hence "Project hack"

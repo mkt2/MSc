@@ -85,6 +85,7 @@ def make_hashfuncs(num_slices, num_bits):
 
 class BloomFilter(object):
     def __init__(self, capacity, error_rate=0.01):
+        print "Initialising pybloom BF(capacity="+str(capacity)+", error_rate="+str(error_rate)+")"
         """Implements a space-efficient probabilistic data structure
 
         capacity
@@ -214,97 +215,7 @@ class BloomFilter(object):
         +"\nAdded "+str(self.count)+" kmers\n"
 
 
-class ScalableBloomFilter(object):
-    SMALL_SET_GROWTH = 2 # slower, but takes up less memory
-    LARGE_SET_GROWTH = 4 # faster, but takes up more memory faster
 
-    def __init__(self, initial_capacity=100, error_rate=0.001,
-                 mode=SMALL_SET_GROWTH):
-        """Implements a space-efficient probabilistic data structure that
-        grows as more items are added while maintaining a steady false
-        positive rate
-
-        initial_capacity
-            the initial capacity of the filter
-        error_rate
-            the error_rate of the filter returning false positives. This
-            determines the filters capacity. Going over capacity greatly
-            increases the chance of false positives.
-        mode
-            can be either ScalableBloomFilter.SMALL_SET_GROWTH or
-            ScalableBloomFilter.LARGE_SET_GROWTH. SMALL_SET_GROWTH is slower
-            but uses less memory. LARGE_SET_GROWTH is faster but consumes
-            memory faster.
-
-        >>> b = ScalableBloomFilter(initial_capacity=512, error_rate=0.001, \
-                                    mode=ScalableBloomFilter.SMALL_SET_GROWTH)
-        >>> b.add("test")
-        False
-        >>> "test" in b
-        True
-
-        """
-        if not error_rate or error_rate < 0:
-            raise ValueError("Error_Rate must be a decimal less than 0.")
-        self.scale = mode
-        self.ratio = 0.9
-        self.initial_capacity = initial_capacity
-        self.error_rate = error_rate
-        self.filters = []
-
-    def __contains__(self, key):
-        """Tests a key's membership in this bloom filter.
-
-        >>> b = ScalableBloomFilter(initial_capacity=100, error_rate=0.001, \
-                                    mode=ScalableBloomFilter.SMALL_SET_GROWTH)
-        >>> b.add("hello")
-        False
-        >>> "hello" in b
-        True
-
-        """
-        for f in reversed(self.filters):
-            if key in f:
-                return True
-        return False
-
-    def add(self, key):
-        """Adds a key to this bloom filter.
-        If the key already exists in this filter it will return True.
-        Otherwise False.
-
-        >>> b = ScalableBloomFilter(initial_capacity=100, error_rate=0.001, \
-                                    mode=ScalableBloomFilter.SMALL_SET_GROWTH)
-        >>> b.add("hello")
-        False
-        >>> b.add("hello")
-        True
-
-        """
-        if key in self:
-            return True
-        filter = self.filters[-1] if self.filters else None
-        if filter is None or filter.count >= filter.capacity:
-            num_filters = len(self.filters)
-            filter = BloomFilter(
-                capacity=self.initial_capacity * (self.scale ** num_filters),
-                error_rate=self.error_rate * (self.ratio ** num_filters))
-            self.filters.append(filter)
-        filter.add(key, skip_check=True)
-        return False
-
-    @property
-    def capacity(self):
-        """Returns the total capacity for all filters in this SBF"""
-        return sum([f.capacity for f in self.filters])
-
-    @property
-    def count(self):
-        return len(self)
-
-    def __len__(self):
-        """Returns the total number of elements stored in this SBF"""
-        return sum([f.count for f in self.filters])
 
 
 if __name__ == "__main__":

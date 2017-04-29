@@ -32,7 +32,10 @@ class Bloom:
 
 	def __len__(self):
 		"""Return the number of keys stored by this bloom filter."""
-		return self.count
+		if self.p==0:
+			return len(self.theSet)
+		else:
+			return self.count
 
 	def __str__(self):
 		if self.p==0:
@@ -51,7 +54,8 @@ class Bloom:
 
 	def computeRatio(self):
 		if self.p==0:
-			raise Exception("This function is not defined for p=0")
+			#raise Exception("This function is not defined for p=0")
+			return -1,-1,-1
 		cZero = 0
 		cOne = self.bitarray.count()
 		cZero = len(self.bitarray) - cOne
@@ -100,22 +104,25 @@ class Bloom:
 
 	#Add kmer to the Bloom Filter
 	def add(self,kmer):
+		self.count += 1
 		if not isinstance(kmer, basestring):
 			raise Exception('Each kmer has to be a string')
 		#print "add(kmer="+str(kmer)+")"
 		if self.p==0:
 			self.theSet.add(kmer)
-		else:
 			if not (kmer in self):
-				#kmerToInt = lambda x: int(sum([pow({'A': 0, 'C': 1, 'G': 2, 'T': 3}[B],2) for B in x]))
-				for i in xrange(0,self.k):
-					#generate a hash value for hash function i
-					value = int(self.myHash(kmer,i))
-					
-					#Set the value at index 'value' as 1
-					self.bitarray[value] = 1
-				assert kmer in self
 				self.count += 1
+		else:
+			#if not (kmer in self):
+			#kmerToInt = lambda x: int(sum([pow({'A': 0, 'C': 1, 'G': 2, 'T': 3}[B],2) for B in x]))
+			for i in xrange(0,self.k):
+				#generate a hash value for hash function i
+				value = int(self.myHash(kmer,i))
+				
+				#Set the value at index 'value' as 1
+				self.bitarray[value] = 1
+			#assert kmer in self
+				
 					
 	#Checks whether the Bloom Filter contains kmer
 	#Either "Maybe it contains the kmer" or
@@ -137,6 +144,14 @@ class Bloom:
 
 
 if __name__ == "__main__":
-	pass
+	BF = Bloom(0.01,100,True)
+	BF.add("AAA")
+	print len(BF)
+	BF.add("AAA")
+	print len(BF)
+	BF.add("ATCGA")
+	print len(BF)
+	BF.add("TTT")
+	print len(BF)
 	
 

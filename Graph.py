@@ -1,7 +1,6 @@
 #coding:utf8
 import collections, sys
 import dbg
-from BF_counter import createNaiveFrom_kmerDict
 #an object of this class represents a legal DBG graph
 class Graph:
 	def __init__(self,k,pfn=False,ps=False,al=True,pil=False,printInit=False):

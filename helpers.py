@@ -34,65 +34,126 @@ def printResultsToFile(BF,G,outFolder="defaultOutFolder",timeInSeconds=-1,nextLi
         b.write("\n"+str(returnTime(int(timeInSeconds))))
     b.close()
 
-def printFigureFromFile(inputFile,sizeOfGenome,title="",outFolder=""):
+def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeName):
+    print "createFigureFromFile(titles="+str(titles)+")"
     f = open(inputFile,"r")
     lineNumber = []
     cov = []
     kmersInGraph = []
     kmersInBF = []
-    kmersInGraph_s = []
+    G_ratio = []
+    BF_ratio = []
+    kmersInGraph_s = []     #k-mers in the Graph using a BF-stopper
     kmersInBF_s = []
+    G_ratio_s = []          #ratio of k-mers in the Graph using a BF-stopper
+    BF_ratio_s = []
     for line in f:
-        temp = line.split(",")
+        temp = line.strip().split(",")
         L = len(temp)
-        assert (L==4) or (L==6)
+        assert (L==6) or (L==10)
         lineNumber.append(int(temp[0]))
         cov.append(int(temp[1]))
         kmersInGraph.append(int(temp[2]))
         kmersInBF.append(int(temp[3]))
-        if L==6:
-            kmersInGraph_s.append(int(temp[4]))     #k-mers in the Graph using a BF-stopper
-            kmersInBF_s.append(int(temp[4]))
+        G_ratio.append(float(temp[4]))
+        BF_ratio.append(float(temp[5]))
+        if L==10:
+            kmersInGraph_s.append(int(temp[6]))
+            kmersInBF_s.append(int(temp[7]))
+            G_ratio_s.append(temp[8])
+            BF_ratio_s.append(temp[9])
     
     #for i, c in enumerate(cov):
     #    print i,c,kmersInGraph[i]
 
-    fig1, (ax1,ax2) = plt.subplots(2,1,sharex=False)
+    fig1, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2)#,sharex='col', sharey='row')
+    fig1.subplots_adjust(hspace=.5)
+    fig1.subplots_adjust(wspace=.5)
     ax1.axhline(y=sizeOfGenome,label="#k-mers in genome")
     ax1.plot(cov,kmersInBF,"k-",label="#k-mers in BF")
     ax1.plot(cov,kmersInGraph,"k--",label='#k-mers in G')
-    if L==6:
-        ax1.plot(cov,kmersInGraph_s,"r--",label='#k-mers in G using BF-stopper')
+    if L==10:
+        ax1.plot(cov,kmersInGraph_s,"r--")
     x1,x2,y1,y2 = ax1.axis()
     #ax1.axis((x1,max(cov),0,700000))
     ax1.axis((x1,max(cov),0,max(kmersInGraph)*2))
-    if title=="":
-        ax1.set_title("#k-mers as a function of cov (log scale below)")
+    assert len(titles)==5
+    if titles==["","","","",""]:
+        fig1.suptitle('No maximum coverage')
+        ax1.set_title("#k-mers / cov")
+        ax2.set_title("Ratio / cov")
+        ax3.set_title("ln(#k-mers) / cov")
+        ax4.set_title("Ratio_log / cov")
     else:
-        ax1.set_title(title)
+        if titles[0]=="":
+            fig1.suptitle('No maximum coverage')
+        else:
+            fig1.suptitle(titles[0])
+        if titles[1]=="":
+            ax1.set_title("#k-mers / cov")
+        else:
+            ax1.set_title(titles[1])
+        if titles[2]=="":
+            ax2.set_title("Ratio / cov")
+        else:
+            ax2.set_title(titles[2])
+        if titles[3]=="":
+            ax3.set_title("ln(#k-mers) / cov")
+        else:
+            ax3.set_title(titles[3])
+        if titles[4]=="":
+            ax4.set_title("Ratio_log / cov")
+        else:
+            ax4.set_title(titles[4])
+    ax3.set_xlabel("Coverage")
+    ax1.set_xlabel("Coverage")
     ax2.set_xlabel("Coverage")
+    ax4.set_xlabel("Coverage")
     ax1.set_ylabel("#k-mers")
-    ax2.set_ylabel("ln(#k-mers)")
+    ax3.set_ylabel("ln(#k-mers)")
+    ax2.set_ylabel("Ratio")
+    ax4.set_ylabel("Ratio on log scale")
     ax1.grid()
 
     kmersInGraph = [0 if x==0 else log(x) for x in kmersInGraph]
     kmersInBF = [0 if x==0 else log(x) for x in kmersInBF]
-    ax2.axhline(y=log(sizeOfGenome),label="#k-mers in genome")
-    ax2.plot(cov,kmersInBF,"k-",label="#k-mers in BF")
-    ax2.plot(cov,kmersInGraph,"k--",label='#k-mers in G')
-    if L==6:
+    ax3.axhline(y=log(sizeOfGenome),label="#k-mers in genome")
+    ax3.plot(cov,kmersInBF,"k-",label="#k-mers in BF")
+    ax3.plot(cov,kmersInGraph,"k--",label='#k-mers in G')
+    if L==10:
         kmersInGraph_s = [0 if x==0 else log(x) for x in kmersInGraph_s]
-        ax2.plot(cov,kmersInGraph_s,"r--",label='#k-mers in G using BF-stopper')
+        ax3.plot(cov,kmersInGraph_s,"r--",label='#With BF_stopper')
+    x1,x2,y1,y2 = ax3.axis()
+    ax3.axis((x1,max(cov),y1,y2))
+    ax3.legend(loc='lower right', bbox_to_anchor=(1.2, -0.05))
+    ax3.grid()
+
+    ax2.axhline(y=1,label="99.9% ratio")
+    ax2.plot(cov,BF_ratio,"k-",label="ratio in BF")
+    ax2.plot(cov,G_ratio,"k--",label='ratio in G')
+    if L==10:
+        ax2.plot(cov,G_ratio_s,"r--",label='With BF-stopper')
     x1,x2,y1,y2 = ax2.axis()
-    ax2.axis((x1,max(cov),y1,y2))
-    ax2.legend(loc='lower right')
-    ax2.grid()
-    if outFolder=="":
-        fig1.savefig('Output/defaultOutFolder/figure_1.png', bbox_inches='tight')
-    else:
-        fig1.savefig(outFolder+"/figure_1.png", bbox_inches='tight')
+    ax2.axis((x1,max(cov),y1,1.1))
+
+    G_ratio = [-log(1-x) for x in G_ratio]
+    BF_ratio = [-log(1-x) for x in BF_ratio]
+    ax4.axhline(y=-log(1-0.999),label="99.9% ratio")
+    ax4.plot(cov,BF_ratio,"k-",label="ratio in BF")
+    ax4.plot(cov,G_ratio,"k--",label='ratio in G')
+    if L==10:
+        ax4.plot(cov,G_ratio_s,"r--",label='With BF-stopper')
+    x1,x2,y1,y2 = ax4.axis()
+    ax4.axis((x1,max(cov),y1,y2))
+    ax2.legend(loc='lower right', bbox_to_anchor=(1.1, 0))
+
+    #if outFolder=="":
+    #    print "Using default outFolder inside helpers.createFigureFromFile"
+    #    outFolder = 'Output/defaultOutFolder'
+    fig1.savefig(outFolder+"/"+genomeName+". maxCov_"+str(maxCov)+".png", bbox_inches='tight')
     f.close()
 
+"""
 def printFigureFromFile2(inputFile,title="",outFolder=""):
     f = open(inputFile,"r")
     lineNumber = []
@@ -136,6 +197,7 @@ def printFigureFromFile2(inputFile,title="",outFolder=""):
         fig2.savefig(outFolder+"/figure_2.png", bbox_inches='tight')
     #plt.show()
     f.close()
+"""
 
 def createKmerDictFrom_fa(fileName,k):
     f = open(fileName,"r")
@@ -174,17 +236,23 @@ def ratioInGenome(kmerdict,G,BF):
     #print "Ratios:",G_ratio,BF_ratio
     return G_ratio,BF_ratio
 
-def changeFile(file,newCol1,newCol2,outFolder=""):
+#Examples:
+#outFolder = "Output/defaultOutFolder/BF_stopper"
+#newFileName = "figureData_maxCov_5.csv"
+def changeFile(file,newCols,outFolder,newFileName):
+    assert len(newCols)==4
     if outFolder=="":
+        print "Using default outFolder inside helpers.changeFile"
         outFolder = "Output/defaultOutFolder/BF_stopper"
-    newFile = outFolder+"/"+os.path.basename(file)
-    print newFile
+    #newFile = outFolder+"/"+os.path.basename(file)
+    newFile = outFolder+"/"+newFileName
     copyfile(file, newFile)
     for i,line in enumerate(fileinput.input(newFile, inplace=True)):
-        assert line.count(",")==3
-        print "%s,%s,%s" % (line.strip(),str(newCol1[i]),str(newCol2[i])+"\n"),
+        assert line.count(",")==5
+        print "%s,%s,%s,%s,%s" % (line.strip(),str(newCols[0][i]),str(newCols[1][i]),str(newCols[2][i]),str(newCols[3][i])+"\n"),
 
 if __name__ == "__main__":
+    pass
     #changeFile("Output/testfile.csv",[0]*21,[0]*21)
-    printFigureFromFile("Output/defaultOutFolder/figureData.csv",sizeOfGenome=70000,title="#k-mers as a function of cov (log scale below)")
-    printFigureFromFile2("Output/defaultOutFolder/figureData2.csv",title="#Ratio of k-mers in G and BF")
+    #createFigureFromFile("Output/defaultOutFolder/Without_BF_stopper/figureData.csv",sizeOfGenome=70000,titles=["","","","",""],outFolder="")
+    #createFigureFromFile("Output/defaultOutFolder/BF_stopper/maxCov_5/figureData.csv",sizeOfGenome=70000,titles=["","","","",""],outFolder="Output/defaultOutFolder/BF_stopper/maxCov_5")

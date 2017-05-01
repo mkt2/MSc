@@ -3,7 +3,9 @@ import collections, sys
 import dbg, Bloom, Graph, helpers
 import os.path
 
+alphabet = ["A","C","G","T","N"]
 
+#dasdf
 #Inputs:
 #	k: kmerLength
 #	fn: a list of fastq files containing reads
@@ -21,17 +23,18 @@ def BF_counter(fn,k,BF,G,pfn=False,printProgress=False,startAtLine=0,sizeOfGenom
 		raise Exception('fn has to be a list')
 	#assert (whatToRun==0 or whatToRun==1)
 	#Open the file and get ready for gathering data for the Figures
-	sampleDensity, readsPerLine = getInfoFromInputFile(fn,sizeOfGenome)
+	if genomeFile=="":
+		print "Using the default genomeFile"
+		genomeFile = "Input/t/t.fa"
+	kmersInGenome,num_kmers_in_genome,sampleDensity, readsPerLine = getInfoFromInputFile(fn,k,genomeFile,numberOfMeasurements=10)
+	print "sizeOfGenome:",sizeOfGenome
+	print "num_kmers_in_genome:",num_kmers_in_genome
 	lineNumber = []
 	cov = []
 	kmersInGraph = []
 	kmersInBF = []
 	G_ratio = []
 	BF_ratio = []
-	if genomeFile=="":
-		print "Using the default genomeFile"
-		genomeFile = "Input/t/t.fa"
-	kmersInGenome = helpers.createKmerDictFrom_fa(genomeFile,k)
 	count = 0
 	noMaxCovFile = "figureData_maxCov_-1.csv"
 	if outDirectory=="":
@@ -56,12 +59,11 @@ def BF_counter(fn,k,BF,G,pfn=False,printProgress=False,startAtLine=0,sizeOfGenom
 
 	genomeName = os.path.dirname(genomeFile).split("/")[-1]
 	print "genomeName:",genomeName
-
 	for f in fn:
 		h = open(f, "rU")
 		for lineNr,line in enumerate(h,start=startAtLine):
 			if (lineNr%4 == 1):
-				segments = filter(lambda x: len(x)>=k,line.strip().split("N"))
+				segments = filter(lambda x: len(x)>=k and all([c in alphabet for c in x]),line.strip().split("N"))
 				#if len(segments)>1:
 				#	print "lineNr="+str(lineNr)+", segments:",segments, "len(segments)="+str(len(segments))
 				for s in segments:
@@ -175,7 +177,8 @@ def file_len(fname):
             pass
     return i + 1
 
-def getInfoFromInputFile(fn,sizeOfGenome):
+
+def getInfoFromInputFile(fn,k,genomeFile,numberOfMeasurements):
 	f = fn[0]
 	numberOfLines  = file_len(f)
 	numberOfReads = int(numberOfLines/4)
@@ -184,12 +187,37 @@ def getInfoFromInputFile(fn,sizeOfGenome):
 	line = h.readline()
 	readsPerLine = len(line)
 	h.close()
-	if sizeOfGenome==-1:
-		sampleDensity = 10000
-	else:
+	if numberOfMeasurements==-1:
 		numberOfMeasurements = 10
-		sampleDensity = numberOfReads/(numberOfMeasurements-1)
-	return sampleDensity, readsPerLine
+	sampleDensity = numberOfReads/(numberOfMeasurements-1)
+
+
+	#Now create kmersInGenome
+	genomeFileExtension = os.path.splitext(genomeFile)[1]
+	kmersInGenome = collections.defaultdict(int)
+	g = open(genomeFile, "rU")
+	if genomeFileExtension==".fa":
+		line = g.readline()
+		line = g.readline().strip()
+		for km in dbg.kmers(line,k):
+			kmersInGenome[km] += 1
+		for km in dbg.kmers(dbg.twin(line),k):
+			kmersInGenome[km] += 1
+	elif genomeFileExtension==".fasta":
+		line = g.readline()
+		for line in g:
+			line = line.strip()
+			line = line if all([c in alphabet for c in line]) else ""
+			tl = dbg.twin(line)
+			for km in dbg.kmers(line,k):
+				kmersInGenome[km] += 1
+			for km in dbg.kmers(tl,k):
+				kmersInGenome[km] += 1
+	else:
+		raise Exception("genomeFile does not have a legal extension. genomeFile="+str(genomeFile))
+	num_kmers_in_genome = len(kmersInGenome)
+	g.close()
+	return kmersInGenome,num_kmers_in_genome,sampleDensity, readsPerLine
 
 def printFigureFile(lineNumber,cov,kmersInGraph,kmersInBF,G_ratio,BF_ratio,outFolder="",outFile=""):
 	print "printFigureFile"

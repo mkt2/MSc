@@ -150,7 +150,7 @@ def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeNa
     #if outFolder=="":
     #    print "Using default outFolder inside helpers.createFigureFromFile"
     #    outFolder = 'Output/defaultOutFolder'
-    fig1.savefig(outFolder+"/"+genomeName+". maxCov_"+str(maxCov)+".png", bbox_inches='tight')
+    fig1.savefig(outFolder+"/"+genomeName+"_maxCov_"+str(maxCov)+".png", bbox_inches='tight')
     f.close()
 
 """
@@ -199,16 +199,7 @@ def printFigureFromFile2(inputFile,title="",outFolder=""):
     f.close()
 """
 
-def createKmerDictFrom_fa(fileName,k):
-    f = open(fileName,"r")
-    l = f.readline()
-    l = f.readline().strip()
-    kmerdict = collections.defaultdict(int)
-    for km in dbg.kmers(l,k):
-        kmerdict[km] = 1
-    for km in dbg.kmers(dbg.twin(l),k):
-        kmerdict[km] = 1
-    return kmerdict
+
 
 #Input:
 #   kmerdict:  A dict storing all kmers actually occurring in the genome. Also stores twins

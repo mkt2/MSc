@@ -3,7 +3,8 @@ import unittest
 import Graph
 from compareGraphs import *
 import BF_counter
-import helpers, Bloom
+import helpers
+import Bloom
 
 
 #--------------------------------------------------------------------------
@@ -1196,7 +1197,7 @@ class Test_addSegmentToGraph(unittest.TestCase):
         G_naive = G.createNaive()
         G.printContigs("G")
         G_naive.printContigs("G_naive")
-        self.assertTrue(graphEqualsNaive(G))
+        self.assertTrue(G.equalsNaive())
 
     def test_21(self):
         G = Graph.Graph(3)
@@ -1204,7 +1205,7 @@ class Test_addSegmentToGraph(unittest.TestCase):
         G_naive = G.createNaive()
         G.printContigs("G")
         G_naive.printContigs("G_naive")
-        self.assertTrue(graphEqualsNaive(G))
+        self.assertTrue(G.equalsNaive())
 
     def test_22(self):
         G = Graph.Graph(3,pfn=False,ps=False,al=False,pil=False)
@@ -1239,7 +1240,7 @@ class Test_addSegmentToGraph(unittest.TestCase):
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=True,pfn=False,ps=False,relaxAssertions=False))
 
 
-
+"""
 class Test_removeHalfAddedKmers(unittest.TestCase):
     def test_1(self):
         G = Graph.Graph(3)
@@ -1257,7 +1258,7 @@ class Test_removeHalfAddedKmers(unittest.TestCase):
         G.kmers["ATT"] = [G.halfAdded,None,None]
         G.removeHalfAddedKmers("AAAT")
         self.assertTrue(G.hasNoKmers())
-
+"""
 
 
 class Test_addSegmentWithNoSeenKmers(unittest.TestCase):
@@ -1438,7 +1439,7 @@ class Test_addSegmentWithNoSeenKmers(unittest.TestCase):
         G_naive = G.createNaive()
         G.printContigs("G")
         G_naive.printContigs("G_naive")
-        self.assertTrue(graphEqualsNaive(G))
+        self.assertTrue(G.equalsNaive())
 
     def test_11(self):
         G = Graph.Graph(3)
@@ -1446,7 +1447,7 @@ class Test_addSegmentWithNoSeenKmers(unittest.TestCase):
         G_naive = G.createNaive()
         G.printContigs("G")
         G_naive.printContigs("G_naive")
-        self.assertTrue(graphEqualsNaive(G))
+        self.assertTrue(G.equalsNaive())
 
     def test_12(self):
         G = Graph.Graph(3)
@@ -1454,7 +1455,7 @@ class Test_addSegmentWithNoSeenKmers(unittest.TestCase):
         G_naive = G.createNaive()
         G.printContigs("G")
         G_naive.printContigs("G_naive")
-        self.assertTrue(graphEqualsNaive(G))
+        self.assertTrue(G.equalsNaive())
 
 class Test_addSegmentAlreadySplitOnSelf(unittest.TestCase):
     def test_1(self):
@@ -2232,9 +2233,8 @@ class Test_mergeSegment(unittest.TestCase):
         G.mergeSegment(99)
         self.assertTrue(G.isLegalDBG())
         segments = ["AGT","TCA","ACA","GTT","GTA","TGG","CAG"]
-        kd = BF_counter.createKmerDictFromSegmentList(segments,k)
-        G_correct = Graph.Graph(k)
-        BF_counter.createNaiveFrom_kmerDict(kd,k,G_correct,pfn=False)
+        kd = helpers.createKmerDictFromSegmentList(segments,k)
+        G_correct = helpers.createNaiveFromKmerDict(kd,k)
 
         self.assertTrue(G_correct.isLegalDBG())
         self.assertTrue(isSameGraph(G,G_correct))
@@ -2270,9 +2270,8 @@ class Test_mergeSegment(unittest.TestCase):
         print "After merge:"
         G.printContigs("G")
         segments = ["AGT","TCA","GTT","AGG","CGT","CAG"]
-        kd = BF_counter.createKmerDictFromSegmentList(segments,k)
-        G_correct = Graph.Graph(k)
-        BF_counter.createNaiveFrom_kmerDict(kd,k,G_correct,pfn=False)
+        kd = helpers.createKmerDictFromSegmentList(segments,k)
+        G_correct = helpers.createNaiveFromKmerDict(kd,k)
 
         self.assertTrue(G_correct.isLegalDBG())
         G.printContigs("G")

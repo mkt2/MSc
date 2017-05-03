@@ -85,8 +85,11 @@ if __name__ == '__main__':
     if whatToRun==0:
         sim_BF_counter_naive(fn,k,BF,G,pfn,printProgress)
     elif whatToRun==1:
-        #sim_BF_counter(fn,k,BF,G,pfn,printProgress,startAtLine)
-        BF_counter.BF_counter(fn,k,BF,G,pfn,printProgress,0,sizeOfGenome,maxCov,genomeFile,outDirectory)
+        #class infoKeeper:
+        #    def __init__(self,fn,k,maxCov,sizeOfGenome,outDirectory,genomeFile):
+        #def BF_counter(fn,k,BF,G,pfn=False,printProgress=False,startAtLine=0):
+        IK = BF_counter.infoKeeper(fn,k,maxCov,sizeOfGenome,outDirectory,genomeFile)
+        BF_counter.BF_counter(fn,k,BF,G,IK,maxCov,pfn,printProgress,0)
     else:
         raise Exception("whatToRun must be either 0 or 1")
     end = time.time()

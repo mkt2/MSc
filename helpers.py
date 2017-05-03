@@ -1,15 +1,13 @@
 #coding:utf8
 import numpy as np
-#import matplotlib.pyplot as plt
-import numpy as np
 import matplotlib.pyplot as plt
-#import matplotlib.pyplot
 import dbg
 import collections
 from math import log
 import fileinput
 from shutil import copyfile
 import os.path
+import Graph
 
 def returnTime(timeInSeconds):
     s = timeInSeconds%60
@@ -60,8 +58,8 @@ def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeNa
         if L==10:
             kmersInGraph_s.append(int(temp[6]))
             kmersInBF_s.append(int(temp[7]))
-            G_ratio_s.append(temp[8])
-            BF_ratio_s.append(temp[9])
+            G_ratio_s.append(float(temp[8]))
+            BF_ratio_s.append((temp[9]))
     
     #for i, c in enumerate(cov):
     #    print i,c,kmersInGraph[i]
@@ -136,12 +134,14 @@ def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeNa
     x1,x2,y1,y2 = ax2.axis()
     ax2.axis((x1,max(cov),y1,1.1))
 
-    G_ratio = [-log(1-x) for x in G_ratio]
-    BF_ratio = [-log(1-x) for x in BF_ratio]
-    ax4.axhline(y=-log(1-0.999),label="99.9% ratio")
+    ratio_1_log_scale = -log(1-0.999)
+    G_ratio = [ratio_1_log_scale if x==1 else -log(1-x) for x in G_ratio]
+    BF_ratio = [ratio_1_log_scale if x==1 else -log(1-x) for x in BF_ratio]
+    ax4.axhline(y=ratio_1_log_scale,label="99.9% ratio")
     ax4.plot(cov,BF_ratio,"k-",label="ratio in BF")
     ax4.plot(cov,G_ratio,"k--",label='ratio in G')
     if L==10:
+        G_ratio_s = [ratio_1_log_scale if x==1 else -log(1-x) for x in G_ratio_s]
         ax4.plot(cov,G_ratio_s,"r--",label='With BF-stopper')
     x1,x2,y1,y2 = ax4.axis()
     ax4.axis((x1,max(cov),y1,y2))
@@ -200,47 +200,72 @@ def printFigureFromFile2(inputFile,title="",outFolder=""):
 """
 
 
+def printAllInfoFromFiles(fn,k):
+    kd = collections.defaultdict(int)       #Stores all kmers in the files
+    kd_BF = collections.defaultdict(int)    #Stores all kmers in the files
+                                            #seen for the second time according to BF
+    numberOfKmers = 0
+    BF = Bloom.Bloom(0.01,6000000,pfn=True)
+    print "Running through the files:"
+    for f in fn:
+        h = open(f, "rU")
+        for lineNr,line in enumerate(h):
+            if (lineNr%4 == 1):
+                segments = filter(lambda x: len(x)>=k,line.strip().split("N"))
+                if len(segments)>1:
+                    print "lineNr="+str(lineNr)+", segments:",segments, "len(segments)="+str(len(segments))
+                for s in segments:
+                    for km in dbg.kmers(s,k):
+                        kd[km] += 1
+                        numberOfKmers += 1
+                        if not km in BF:
+                            BF.add(km)
+                        else:
+                            kd_BF[km] += 1
+                    for km in dbg.kmers(dbg.twin(s),k):
+                        kd[km] += 1
+                        numberOfKmers +=1
+                        if not km in BF:
+                            BF.add(km)
+                        else:
+                            kd_BF[km] += 1
 
-#Input:
-#   kmerdict:  A dict storing all kmers actually occurring in the genome. Also stores twins
-#   G:         Our Graph
-#   BF:        Our Bloom filter
-#Returns:
-#   The ratio of kmers in the genome that occur in G
-#   The ratio of kmers in the genome that occur in BF
-def ratioInGenome(kmerdict,G,BF):
-    G_count = 0
-    BF_count = 0
-    for km in kmerdict:
-        if km in G.kmers:
-            G_count += 1
-        if km in BF:
-            BF_count += 1
-    if len(G)==0:
-        G_ratio = 0
-    else:
-        G_ratio = float(G_count) / len(kmerdict)
-    if len(BF)==0:
-        BF_ratio = 0
-    else:
-        BF_ratio = float(BF_count) / len(kmerdict)
-    #print "Ratios:",G_ratio,BF_ratio
-    return G_ratio,BF_ratio
+    G_twice = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False,printInit=True)
+    numberOfAtLeastTwice = 0
+    for km,num in kd.iteritems():
+        if num > 1:
+            G_twice.addSegmentToGraph(km)
+            numberOfAtLeastTwice += 1
+    G_BF = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False,printInit=True)
+    for km,num in kd_BF.iteritems():
+        G_BF.addSegmentToGraph(km)
+    
+    print "Total number of kmers in the files:                  ", numberOfKmers
+    print "Number of unique kmers in the files:                 ", len(kd)
+    print "Number of kmers in the BF:                           ", len(BF)
+    print "Number of kmers occuring at least twice in the files: ", numberOfAtLeastTwice
+    print "Same number according to BF:                          ", len(kd_BF)
+    print "Number of kmers in G_twice:                           ", len(G_twice.kmers)
+    print "Number of contigs in G_twice:                          ", len(G_twice)
+    print "Number of kmers in G_BF:                              ", len(G_BF.kmers)
+    print "Number of contigs in G_BF:                            ", len(G_BF)
+    print BF
+    BF.print_bitarray()
 
-#Examples:
-#outFolder = "Output/defaultOutFolder/BF_stopper"
-#newFileName = "figureData_maxCov_5.csv"
-def changeFile(file,newCols,outFolder,newFileName):
-    assert len(newCols)==4
-    if outFolder=="":
-        print "Using default outFolder inside helpers.changeFile"
-        outFolder = "Output/defaultOutFolder/BF_stopper"
-    #newFile = outFolder+"/"+os.path.basename(file)
-    newFile = outFolder+"/"+newFileName
-    copyfile(file, newFile)
-    for i,line in enumerate(fileinput.input(newFile, inplace=True)):
-        assert line.count(",")==5
-        print "%s,%s,%s,%s,%s" % (line.strip(),str(newCols[0][i]),str(newCols[1][i]),str(newCols[2][i]),str(newCols[3][i])+"\n"),
+def createKmerDictFromSegmentList(SL,k):
+    kd = collections.defaultdict(int)
+    for segment in SL:
+        for km in dbg.kmers(segment,k):
+            kd[km] += 1
+        for km in dbg.kmers(dbg.twin(segment),k):
+            kd[km] += 1
+    return kd
+
+def createNaiveFromKmerDict(kd,k):
+    G,cs = dbg.all_contigs(kd,k)
+    G_naive = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False)
+    dbg.createGraphObject(G,cs,k,G_naive,pfn=False,ps=False)
+    return G_naive
 
 if __name__ == "__main__":
     pass

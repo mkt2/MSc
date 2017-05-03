@@ -1,6 +1,7 @@
 #coding:utf8
 import collections, sys
 import dbg
+import compareGraphs
 #an object of this class represents a legal DBG graph
 class Graph:
 	def __init__(self,k,pfn=False,ps=False,al=True,pil=False,printInit=False):
@@ -141,6 +142,16 @@ class Graph:
 		G_naive = Graph(k=self.k,pfn=self.printFunctionNames,ps=self.printStatus,al=self.assertLegal,pil=self.printIsLegal)
 		dbg.createGraphObject(G,cs,self.k,G_naive,self.printFunctionNames,ps=False)
 		return G_naive
+
+	def equalsNaive(self,G_naive=-1):
+		if self.printFunctionNames:
+			print "graphEqualsNaive(G,G_naive)"
+		if G_naive==-1:
+			G_naive = self.createNaive()
+		if self.printStatus:
+			self.printContigs("G")
+			G_naive.printContigs("G_naive")
+		return compareGraphs.isSameGraph(self,G_naive,False,self.printFunctionNames,self.printStatus,relaxAssertions=False)
 
 	#--------------------------------------------------------------------------
 	#-----------------Simple functions for working with graphs-----------------
@@ -861,55 +872,24 @@ class Graph:
 		if len(segment) < self.k:
 			return
 
+		start = 0
+		tmp = collections.defaultdict(list)
 		for i, km in enumerate(dbg.kmers(segment,self.k)):
-			#print i,km
-			if km in self.kmers:
-				#increase the COV of the contig where we've seen km
-				[cID,index,B] = self.kmers[km]
-				if not [cID,index,B] == [self.halfAdded,None,None]:
-					self.increaseCOV_by(cID,1)
-				#print "km in self.kmers. km="+str(km)
-				self.removeHalfAddedKmers(segment)
-
-				if i>=1:
-					#print "case 2. segment="+str(segment)+". i="+str(i)
-					self.addSegmentWithNoSeenKmers(segment[0:i-1+self.k])
-
-				#print "case 1. segment="+str(segment)+". i="+str(i)
-				self.addSegmentToGraph(segment[i+1:])
-
-				return
-
-			#add km to self.kmers with a temporary value
-			#We only need to add them to be able to tell whether segment
-			#has the same kmer twice.
-			#we delete these temporary values before calling addSegmentWithNoSeenKmers
-			self.kmers[km] = [self.halfAdded,None,None]
-			self.kmers[dbg.twin(km)] = [self.halfAdded,None,None]
-
-		self.removeHalfAddedKmers(segment)
-		#print "case 3. segment="+str(segment)+". i="+str(i)
-		self.addSegmentWithNoSeenKmers(segment)
+			if not ((km in self.kmers) or (km in tmp)):
+				#We have not seen this kmers before
+				tmp[km] = [None,None,None]
+				tmp[dbg.twin(km)] = [None,None,None]
+			else:
+				#We have seen this kmer before
+				if i-start>=1:
+					self.addSegmentWithNoSeenKmers(segment[start:i-1+self.k])
+				start = i+1
+			
+		self.addSegmentWithNoSeenKmers(segment[start:])
 		if self.assertLegal:
 			assert self.isLegalDBG()
 
-	#helper function for addSegmentToGraph
-	#def removeHalfAddedKmers(self):
-	#	print "removeHalfAddedKmers()"
-	#	self.kmers = {k: v for k, v in self.kmers.iteritems() if v != [self.halfAdded,None,None]}
 
-	def removeHalfAddedKmers(self,segment):
-		if self.printFunctionNames:
-			print "removeHalfAddedKmers(segment="+str(segment)+")"
-		if self.printStatus:
-			pass
-			#self.printContigs("inside removeHalfAddedKmers")
-			#self.printKmers("Kmers")
-		for km in dbg.kmers(segment,self.k):
-			if km in self.kmers:
-				if self.kmers[km]==[self.halfAdded,None,None]:
-					del self.kmers[km]
-					del self.kmers[dbg.twin(km)]
 
 	#Helper function for addSegmentToGraph
 	#Before:	segment is a DNA string

@@ -88,8 +88,10 @@ def isSameGraph(G1,G2,alsoCompareWithNaive=True,pfn=False,ps=False,relaxAssertio
 		if ps:
 			G1.printContigs("G1")
 			G2.printContigs("G2")
-		B1 = graphEqualsNaive(G1,-1,pfn,ps)
-		B2 = graphEqualsNaive(G2,-1,pfn,ps)
+		#B1 = graphEqualsNaive(G1,-1,pfn,ps)
+		#B2 = graphEqualsNaive(G2,-1,pfn,ps)
+		B1 = G1.equalsNaive()
+		B2 = G2.equalsNaive()
 		if not B1:
 			print "G1 does not equal G_naive"
 		elif not B2:
@@ -259,6 +261,7 @@ def same_INs_OUTs_COV(G1,G2,pfn=True,ps=True):
 		found = False
 	return True
 
+"""
 def graphEqualsNaive(G,G_naive=-1,pfn=True,ps=True):
 	if pfn:
 		print "graphEqualsNaive(G,G_naive)"
@@ -268,6 +271,7 @@ def graphEqualsNaive(G,G_naive=-1,pfn=True,ps=True):
 		G.printContigs("G")
 		G_naive.printContigs("G_naive")
 	return isSameGraph(G,G_naive,False,pfn,ps,relaxAssertions=False)
+"""
 
 if __name__ == "__main__":
     k = 3

@@ -1651,7 +1651,7 @@ class Graph:
 			return self.merge(b_ID,a_ID,True,True)
 
 
-
+"""
 	#This is not used anywhere anymore. Could be useful later though
 	#-----Helper function for splitContig-----
 	#Before:	ID is the ID of a contig c
@@ -1713,7 +1713,7 @@ class Graph:
 
 		#delete c (and therefore we don't need to worry about deleting every individual IN/OUT of c)
 		del self.contigs[ID]
-
+"""
 
 
 #------------------------Helper functions------------------------

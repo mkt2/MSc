@@ -85,11 +85,6 @@ class Bloom:
 	#Add kmer to the Bloom Filter
 	def add(self,kmer):
 		self.count += 1
-		#if not isinstance(kmer, basestring):
-		#	raise Exception('Each kmer has to be a string')
-		#print "add(kmer="+str(kmer)+")"
-		#if not (kmer in self):
-		#kmerToInt = lambda x: int(sum([pow({'A': 0, 'C': 1, 'G': 2, 'T': 3}[B],2) for B in x]))
 		for i in xrange(0,self.k):
 			#generate a hash value for hash function i
 			value = int(self.myHash(kmer,i))
@@ -114,6 +109,26 @@ class Bloom:
 				return False
 		return True
 
+	#Purpose:
+	#	Do the same as:
+	#		if kmer in BF:
+	#			BF.add(kmer)
+	#	...just faster...
+	#Adds the kmer to the BF and returns whether or not it was there already
+	#This function is supposed to run 
+	def kmerInBF_also_AddIf_B_is_True(self,kmer,B):
+		alreadyInBF = True
+		for i in xrange(0,self.k):
+			#generate a hash value for hash function i
+			value = int(self.myHash(kmer,i))
+			if not (self.bitarray[value] == 1):
+				alreadyInBF = False
+				#Only add the kmer to BF if B==True
+				if B:
+					self.bitarray[value] = 1
+		#assert (B==False) or (kmer in self), "B="+str(B)+", kmer in self="+str(kmer in self)
+		return alreadyInBF
+		
 
 if __name__ == "__main__":
 	BF = Bloom(0.01,100,True)

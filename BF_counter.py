@@ -197,19 +197,17 @@ def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0):
 					start = 0
 					for i, kmer in enumerate(dbg.kmers(s,k)):
 						#print lineNr,i,kmer,start
-						if not (kmer in BF):
-							if (maxCov==-1) or (cov[-1] <= maxCov):
+						#if not (kmer in BF):
+						if not BF.kmerInBF_also_AddIf_B_is_True( kmer , B=( (maxCov==-1) or (cov[-1] <= maxCov) ) ):
+							#if (maxCov==-1) or (cov[-1] <= maxCov):
 								#print maxCov,cov
-								BF.add(kmer)
-								BF.add(dbg.twin(kmer))
-							#else:
-							#	if not maxCov==-1:
-							#		print "We don't add to BF due to the cov stopper"
+								#BF.add(kmer)
+								#BF.add(dbg.twin(kmer))
 							if i-start>0:
 								goodSequence = s[start:i+k-1]
-								assert len(goodSequence)>=k
 								for temp_km in dbg.kmers(goodSequence,k):
 									assert temp_km in BF, "temp_km="+str(temp_km)
+									#print "About to addSegmentToGraph"
 								G.addSegmentToGraph(goodSequence)
 							start = i+1
 					#If we reach the end of segment we add the current sequence

@@ -37,28 +37,27 @@ def readInput():
     read2 = sys.argv[3]
     numberOfKmers = int(sys.argv[4])
     whatToRun = int(sys.argv[5])        #0: BF_counter_naive. 1: BF_counter
-    sizeOfGenome = int(sys.argv[6])
-    maxCov = int(sys.argv[7])
+    #sizeOfGenome = int(sys.argv[6])
+    maxCov = int(sys.argv[6])
     pfn = False
     printProgress = True
     #startAtLine = 0
     #fileName = ""
     genomeFile = ""
+    if len(sys.argv)>7:
+        pfn = map((lambda x: {"False":False,"True":True}[x]), [sys.argv[7]])[0]
     if len(sys.argv)>8:
-        pfn = map((lambda x: {"False":False,"True":True}[x]), [sys.argv[8]])[0]
+        printProgress = map((lambda x: {"False":False,"True":True}[x]), [sys.argv[8]])[0]
     if len(sys.argv)>9:
-        printProgress = map((lambda x: {"False":False,"True":True}[x]), [sys.argv[9]])[0]
+        genomeFile  = sys.argv[9]
     if len(sys.argv)>10:
-        genomeFile  = sys.argv[10]
-    if len(sys.argv)>11:
-        outDirectory = sys.argv[11]
+        outDirectory = sys.argv[10]
         
     assert isinstance(k, int)
     assert isinstance(read1,str)
     assert isinstance(read2,str)
     assert isinstance(numberOfKmers,int)
     assert isinstance(whatToRun,int)
-    assert isinstance(sizeOfGenome,int)
     assert isinstance(maxCov,int)
     assert isinstance(pfn,bool)
     assert isinstance(printProgress,bool)
@@ -67,7 +66,7 @@ def readInput():
     assert isinstance(outDirectory,str)
     #assert isinstance(fileName,str)
     fn = [read1,read2]
-    return k,fn,numberOfKmers,whatToRun,sizeOfGenome,maxCov,pfn,printProgress,genomeFile,outDirectory
+    return k,fn,numberOfKmers,whatToRun,maxCov,pfn,printProgress,genomeFile,outDirectory
 
 if __name__ == '__main__':
     #command line syntax:
@@ -79,7 +78,7 @@ if __name__ == '__main__':
     #Svo:
     #python simData.py 31 Input/t/r1.fastq Input/t/r2.fastq 6000000 1 70000 5 True
     start = time.time()
-    k,fn,numberOfKmers,whatToRun,sizeOfGenome,maxCov,pfn,printProgress,genomeFile,outDirectory = readInput()
+    k,fn,numberOfKmers,whatToRun,maxCov,pfn,printProgress,genomeFile,outDirectory = readInput()
 
     BF,G = initialize(fn,k,numberOfKmers)
     if whatToRun==0:
@@ -88,7 +87,7 @@ if __name__ == '__main__':
         #class infoKeeper:
         #    def __init__(self,fn,k,maxCov,sizeOfGenome,outDirectory,genomeFile):
         #def BF_counter(fn,k,BF,G,pfn=False,printProgress=False,startAtLine=0):
-        IK = BF_counter.infoKeeper(fn,k,maxCov,sizeOfGenome,outDirectory,genomeFile)
+        IK = BF_counter.infoKeeper(fn,k,maxCov,outDirectory,genomeFile)
         BF_counter.BF_counter(fn,k,BF,G,IK,maxCov,pfn,printProgress,0)
     else:
         raise Exception("whatToRun must be either 0 or 1")

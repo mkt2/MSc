@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 import dbg
 import collections
 from math import log
-import fileinput
-from shutil import copyfile
 import os.path
 import Graph
 
@@ -33,7 +31,7 @@ def printResultsToFile(BF,G,outFolder="defaultOutFolder",timeInSeconds=-1,nextLi
     b.close()
 
 def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeName):
-    print "createFigureFromFile(titles="+str(titles)+")"
+    print "createFigureFromFile(sizeOfGenome="+str(sizeOfGenome)+", titles="+str(titles)+")"
     f = open(inputFile,"r")
     lineNumber = []
     cov = []
@@ -67,7 +65,7 @@ def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeNa
     fig1, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2)#,sharex='col', sharey='row')
     fig1.subplots_adjust(hspace=.5)
     fig1.subplots_adjust(wspace=.5)
-    ax1.axhline(y=sizeOfGenome,label="#k-mers in genome")
+    ax1.axhline(y=sizeOfGenome/2,label="#k-mers in genome")
     ax1.plot(cov,kmersInBF,"k-",label="#k-mers in BF")
     ax1.plot(cov,kmersInGraph,"k--",label='#k-mers in G')
     if L==10:
@@ -115,7 +113,7 @@ def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeNa
 
     kmersInGraph = [0 if x==0 else log(x) for x in kmersInGraph]
     kmersInBF = [0 if x==0 else log(x) for x in kmersInBF]
-    ax3.axhline(y=log(sizeOfGenome),label="#k-mers in genome")
+    ax3.axhline(y=log(sizeOfGenome/2),label="#k-mers in genome")
     ax3.plot(cov,kmersInBF,"k-",label="#k-mers in BF")
     ax3.plot(cov,kmersInGraph,"k--",label='#k-mers in G')
     if L==10:
@@ -126,7 +124,7 @@ def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeNa
     ax3.legend(loc='lower right', bbox_to_anchor=(1.2, -0.05))
     ax3.grid()
 
-    ax2.axhline(y=1,label="99.9% ratio")
+    ax2.axhline(y=1,label="99.99% ratio")
     ax2.plot(cov,BF_ratio,"k-",label="ratio in BF")
     ax2.plot(cov,G_ratio,"k--",label='ratio in G')
     if L==10:
@@ -134,10 +132,10 @@ def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeNa
     x1,x2,y1,y2 = ax2.axis()
     ax2.axis((x1,max(cov),y1,1.1))
 
-    ratio_1_log_scale = -log(1-0.999)
+    ratio_1_log_scale = -log(1-0.9999)
     G_ratio = [ratio_1_log_scale if x==1 else -log(1-x) for x in G_ratio]
     BF_ratio = [ratio_1_log_scale if x==1 else -log(1-x) for x in BF_ratio]
-    ax4.axhline(y=ratio_1_log_scale,label="99.9% ratio")
+    ax4.axhline(y=ratio_1_log_scale,label="99.99% ratio")
     ax4.plot(cov,BF_ratio,"k-",label="ratio in BF")
     ax4.plot(cov,G_ratio,"k--",label='ratio in G')
     if L==10:
@@ -153,51 +151,6 @@ def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeNa
     fig1.savefig(outFolder+"/"+genomeName+"_maxCov_"+str(maxCov)+".png", bbox_inches='tight')
     f.close()
 
-"""
-def printFigureFromFile2(inputFile,title="",outFolder=""):
-    f = open(inputFile,"r")
-    lineNumber = []
-    cov = []
-    G_ratio = []
-    BF_ratio = []
-    G_ratio_s = []
-    BF_ratio_s = []
-    for line in f:
-        temp = line.split(",")
-        L = len(temp)
-        assert (L==4) or (L==6)
-        lineNumber.append(int(temp[0]))
-        cov.append(int(temp[1]))
-        G_ratio.append(temp[2])
-        BF_ratio.append(temp[3])
-        if L==6:
-            G_ratio_s.append(temp[4])     #ratio of k-mers in the Graph using a BF-stopper
-            BF_ratio_s.append(temp[4])
-    fig2 = plt.figure()
-    ax2 = fig2.add_subplot(111)
-    ax2.axhline(y=1,label="100% ratio")
-    ax2.plot(cov,BF_ratio,"k-",label="ratio in BF")
-    ax2.plot(cov,G_ratio,"k--",label='ratio in G')
-    if L==6:
-        ax2.plot(cov,G_ratio_s,"r--",label='ratio in G using BF-stopper')
-    x1,x2,y1,y2 = ax2.axis()
-    ax2.axis((x1,x2,0,1.1))
-
-    if title=="":
-        plt.title("#Ratio of k-mers in G and BF")
-    else:
-        plt.title(title)
-    plt.xlabel("Coverage")
-    plt.ylabel("Ratio of correct k-mers")
-    ax2.legend(loc='lower right')
-    ax2.grid()
-    if outFolder=="":
-        fig2.savefig('Output/defaultOutFolder/figure_2.png', bbox_inches='tight')
-    else:
-        fig2.savefig(outFolder+"/figure_2.png", bbox_inches='tight')
-    #plt.show()
-    f.close()
-"""
 
 
 def printAllInfoFromFiles(fn,k):
@@ -266,6 +219,12 @@ def createNaiveFromKmerDict(kd,k):
     G_naive = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False)
     dbg.createGraphObject(G,cs,k,G_naive,pfn=False,ps=False)
     return G_naive
+
+def file_len(fname):
+    with open(fname) as f:
+        for i, l in enumerate(f):
+            pass
+    return i + 1
 
 if __name__ == "__main__":
     pass

@@ -51,6 +51,7 @@ class Test_Bloom(unittest.TestCase):
         self.assertTrue(BF.hasAcceptableRatio(ratio))
 
     #try a false positive rate of 0
+    """
     def test_3(self):
         print "\nTest_Bloom.test_3"
         #n = 1000000, kmerLength=13     #17 sek
@@ -80,7 +81,7 @@ class Test_Bloom(unittest.TestCase):
         #print "Actual false positive rate:", FPR
         #print "Desired false positive proability p:", p
         self.assertTrue(FPR<=p)
-
+    """
 
     def test_4(self):
         print "\nTest_Bloom.test_4"
@@ -145,7 +146,38 @@ class Test_Bloom(unittest.TestCase):
         BF.add("GATTATAGACACACGATATGATGGTTCCCCC")
         BF.add("ATATATCCGGCGATAGTAGCGCGTTTTAGGC")
         self.assertFalse(BF.hasAcceptableRatio())
-        
+    
+    #Test kmerInBF_also_AddIf_B_is_True(self,kmer,B)
+    def test_9(self):
+        print "\nTest_Bloom.test_9"
+        n = 100000000; kmerLength = 9; p=0.01
+        BF = Bloom(p,n,False)
+
+        #generate n kmers and add them to BF
+        kmers = generate_n_kmers_of_length_k(n*2,kmerLength)
+        for i in xrange(0,len(kmers)/2):
+            BF.kmerInBF_also_AddIf_B_is_True(kmers[i],B=True,alsoAddTwin=False)
+            assert kmers[i] in BF
+
+        #check whether the false positive rate holds
+        fpos = 0   #number of false positives
+        for i in xrange(len(kmers)/2,len(kmers)):
+            km = kmers[i]
+            if km in BF:
+                fpos += 1
+
+        FPR = float(fpos)/n
+        #print "Printing the bloom filter"
+        #print BF
+        #print "Number of False Positives:",fpos
+        #print "Actual false positive rate:", FPR
+        #print "Desired false positive proability p:", p
+        #print "Number of kmers of given length: 4^kmerLength =", pow(4,kmerLength)
+        self.assertTrue(FPR<=p,"FPR="+str(FPR))
+        ratio,cZero,cOne = BF.computeRatio()
+        self.assertTrue(BF.hasAcceptableRatio(ratio))
+        #print BF
+
 
 def generate_n_kmers_of_length_k(n,k):
     return [''.join(i) for i in itertools.product("ACGT",repeat=k)][0:n]

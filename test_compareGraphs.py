@@ -477,13 +477,13 @@ class Test_graphsEqualsNaive(unittest.TestCase):
         G = Graph.Graph(3)
         G.contigs[G.getID()] = ["AAA",[(0,True)],[(0,True)],0]
         G.addKmersFromAllContigs()
-        self.assertTrue(graphEqualsNaive(G))
+        self.assertTrue(G.equalsNaive())
 
     def test_2(self):
         G = Graph.Graph(3)
         G.addSegmentToGraph("AAATCC")
         G.addKmersFromAllContigs()
-        self.assertTrue(graphEqualsNaive(G))
+        self.assertTrue(G.equalsNaive())
 
 
 if __name__ == '__main__':

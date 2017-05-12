@@ -92,6 +92,7 @@ class infoKeeper:
 		self.G_ratio_maxCov = []
 
 	def append(self,G,BF,cov):
+		print "append(",len(G.kmers),len(BF),cov,")"
 		#print "append(len(G)="+str(len(G))+", len(BF)="+str(len(BF))+", cov="+str(cov)+")"
 		g,bf = self.ratioInGenome(G,BF)
 		if self.maxCov==-1:
@@ -229,6 +230,9 @@ def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0,s
 	covFactor = float(IK.num_kmersPerLine) / IK.num_kmers_in_genome_counted
 	cov = 0
 	count = 0
+	kd = collections.defaultdict(int)		#A dict storing every kmer that we see twice according to the BF
+	kd2 = collections.defaultdict(int)		#A dict storing every kmer we actually see twice
+	#										len(kd)<=len(kd2)*1.01 should be true. Otherwise the BF code is not working
 	for f in fn:
 		h = open(f, "rU")
 		for lineNr,line in enumerate(h,start=startAtLine):
@@ -238,7 +242,7 @@ def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0,s
 					assert isinstance(s, basestring)
 
 					#Prentum út stöðuna annað slagið:
-					if printProgress and (lineNr%10000==1):
+					if printProgress and (lineNr%50000==1):
 						print "We are reading the segment from line "+str(lineNr)+" from the file "+str(f)
 						if lineNr%100000==1:
 							ratio = BF.computeRatio()[0]
@@ -251,8 +255,8 @@ def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0,s
 					#á "sampleDensity" segmenta fresti þá mælum við fjölda k-mera í
 					#G og BF ásamt coverage og geymum niðurstöðurnar
 					if (not skipPictures) and (count%sampleDensity==0):
-						if printProgress:
-							print "count%sampleDensity==0. sampleDensity="+str(sampleDensity)+", count="+str(count)
+						#if printProgress:
+						#	print "Taking a sample. LineNr="+str(lineNr)+", count="+str(count)
 						IK.append(G,BF,cov)
 
 					#Bætum öllum k-merum úr s við BF
@@ -267,13 +271,27 @@ def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0,s
 					L = len(s)
 					start = 0
 					for i, kmer in enumerate(dbg.kmers(s,k)):
-						if not BF.kmerInBF_also_AddIf_B_is_True(kmer, B1):
+						tkmer = dbg.twin(kmer)
+						if B1:
+							kd2[kmer] += 1
+							kd2[tkmer] += 1
+						#if not BF.kmerInBF_also_AddIf_B_is_True(kmer, tkmer, B1):
+						if not kmer in BF:
 							if i-start>0:
 								goodSequence = s[start:i+k-1]
-								for temp_km in dbg.kmers(goodSequence,k):
-									assert temp_km in BF, "temp_km="+str(temp_km)
 								G.addSegmentToGraph(goodSequence)
 							start = i+1
+						else:
+							#Ath: Get fengið FP þ.a. km in BF en ekki tkmer
+							if B1:
+								#assert kmer in BF
+								#assert tkmer in BF
+								#kmer is in BF
+								kd[kmer] += 1
+								kd[tkmer] += 1
+						if B1:
+							BF.add(kmer)
+							BF.add(tkmer)
 					#If we reach the end of segment we add the current sequence
 					if L-start>=k:
 						assert len(s[start:])>=k
@@ -286,7 +304,20 @@ def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0,s
 	if not skipPictures:
 		#Prentum niðurstöðurnar í skrá sem við getum notað síðar til að búa til mynd
 		IK.printResults()
-
+	if B1:
+		print "\nThere are "+str(len(kd))+" kmers we saw >=2 times according to the BF"
+		print "We raise assertion if there aren't equally many kmers in G"
+		assert len(kd)==len(G.kmers)
+		print "There are "+str(len(kd2))+" kmers actually in the reads"
+		temp = [x for x in kd2 if kd2[x] <= 1]
+		for x in temp:
+			del kd2[x]
+		print "There are "+str(len(kd2))+" kmers we actually saw >=2 times"
+		for km in kd2:
+			assert km in BF, "Every kmer we actually saw twice should be in the BF (otherwise we have a False Negative)"
+		print "len(kd)/len(kd2)="+str(float(len(kd))/len(kd2))+". It should be less than FPR="+str(FPR)
+		#print "We raise assertion if len(kd)<=len(kd2)*1.01 isn't true"
+		#assert len(kd)<=len(kd2)*1.01, "len(kd)/len(kd2)="+str(float(len(kd))/len(kd2))+" but should be less than FPR="+str(FPR)
 
 def BF_counter_naive(fn,BF,k,G_naive,pfn=True,printProgress=False):
 	if pfn:
@@ -332,17 +363,20 @@ if __name__ == "__main__":
 	#numberOfKmers = 100000000
 	fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
 	genomeFile = "Input/t/t.fa"
-	numberOfKmers = 6000000
+	numberOfKmers = 50000000
+					#var áður 6000000
 	genomeName = os.path.dirname(genomeFile).split("/")[-1]
 	outDirectory = "Output/"+os.path.dirname(genomeFile).split("/")[-1]
 	IK = infoKeeper(fn,k,outDirectory,genomeFile)
 	pfn = True
-	printProgress = False
+	printProgress = True
 	start_i = time.time()
+	FPR = 0.01
 	for maxCov in maxCovs:
 		start_i = time.time()
-		print "\nStarting on maxCov="+str(maxCov)
-		BF = Bloom.Bloom(0.01,numberOfKmers,pfn=False)
+		print "\n-------------------------------------------------------"
+		print "Starting on maxCov="+str(maxCov)
+		BF = Bloom.Bloom(FPR,numberOfKmers,pfn=True)
 		G = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False,printInit=False)
 		assert len(G)==0
 		assert len(G.kmers)==0
@@ -350,6 +384,7 @@ if __name__ == "__main__":
 		end_i = time.time()
 		print "Finished maxCov="+str(maxCov)
 		print helpers.returnTime(int(end_i-start_i))
+		print "-------------------------------------------------------\n"
 	print "Finished everything:"
 	print helpers.returnTime(int(end_i-start_i))
     

@@ -87,7 +87,6 @@ class Bloom:
 
 	#Add kmer to the Bloom Filter
 	def add(self,kmer):
-		self.count += 1
 		h = hash(kmer)
 		for i in xrange(0,self.k):
 			#generate a hash value for hash function i
@@ -123,9 +122,9 @@ class Bloom:
 	#	...just faster...
 	#Adds the kmer to the BF and returns whether or not it was there already
 	#This function is supposed to run 
-	def kmerInBF_also_AddIf_B_is_True(self,kmer,B,alsoAddTwin=True):
+	def kmerInBF_also_AddIf_B_is_True(self,rep_kmer,B):
 		alreadyInBF = True
-		h = hash(kmer)
+		h = hash(rep_kmer)
 		for i in xrange(0,self.k):
 			#generate a hash value for hash function i
 			#value = (self.randNum + i*h) % self.m
@@ -135,9 +134,6 @@ class Bloom:
 				#Only add the kmer to BF if B==True
 				if B:
 					self.bitarray[value] = 1
-		#assert (B==False) or (kmer in self), "B="+str(B)+", kmer in self="+str(kmer in self)
-		if not alreadyInBF and alsoAddTwin:
-			self.add(dbg.twin(kmer))
 		return alreadyInBF
 		
 

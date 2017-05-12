@@ -42,6 +42,8 @@ class Graph:
 		#this is a comment
 		return contig in self.contigs
 
+	def numKmerPairs(self):
+		return len(self.kmers)/2
 	#--------------------------------------------------------------------------
 	#--------------------------functions for printing--------------------------
 	#--------------------------------------------------------------------------

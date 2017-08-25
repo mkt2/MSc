@@ -5,7 +5,7 @@ import dbg
 import collections
 from math import log
 import os.path
-import Graph
+import Graph, Bloom
 
 def returnTime(timeInSeconds):
     s = timeInSeconds%60
@@ -30,159 +30,29 @@ def printResultsToFile(BF,G,outFolder="defaultOutFolder",timeInSeconds=-1,nextLi
         b.write("\n"+str(returnTime(int(timeInSeconds))))
     b.close()
 
-def createFigureFromFile(inputFile,sizeOfGenome,titles,outFolder,maxCov,genomeName):
-    print "createFigureFromFile(sizeOfGenome="+str(sizeOfGenome)+", titles="+str(titles)+")"
-    f = open(inputFile,"r")
-    lineNumber = []
-    cov = []
-    kmersInGraph = []
-    kmersInBF = []
-    G_ratio = []
-    BF_ratio = []
-    kmersInGraph_s = []     #k-mers in the Graph using a BF-stopper
-    kmersInBF_s = []
-    G_ratio_s = []          #ratio of k-mers in the Graph using a BF-stopper
-    BF_ratio_s = []
-    for line in f:
-        temp = line.strip().split(",")
-        L = len(temp)
-        assert (L==6) or (L==10)
-        lineNumber.append(int(temp[0]))
-        cov.append(int(temp[1]))
-        kmersInGraph.append(int(temp[2]))
-        kmersInBF.append(int(temp[3]))
-        G_ratio.append(float(temp[4]))
-        BF_ratio.append(float(temp[5]))
-        if L==10:
-            kmersInGraph_s.append(int(temp[6]))
-            kmersInBF_s.append(int(temp[7]))
-            G_ratio_s.append(float(temp[8]))
-            BF_ratio_s.append((temp[9]))
-    
-    #for i, c in enumerate(cov):
-    #    print i,c,kmersInGraph[i]
 
-    fig1, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2)#,sharex='col', sharey='row')
-    fig1.subplots_adjust(hspace=.5)
-    fig1.subplots_adjust(wspace=.5)
-    ax1.axhline(y=sizeOfGenome/2,label="#k-mers in genome")
-    ax1.plot(cov,kmersInBF,"k-",label="#k-mers in BF")
-    ax1.plot(cov,kmersInGraph,"k--",label='#k-mers in G')
-    if L==10:
-        ax1.plot(cov,kmersInGraph_s,"r--")
-    x1,x2,y1,y2 = ax1.axis()
-    #ax1.axis((x1,max(cov),0,700000))
-    ax1.axis((x1,max(cov),0,max(kmersInGraph)*2))
-    assert len(titles)==5
-    if titles==["","","","",""]:
-        fig1.suptitle('No maximum coverage')
-        ax1.set_title("#k-mers / cov")
-        ax2.set_title("Ratio / cov")
-        ax3.set_title("ln(#k-mers) / cov")
-        ax4.set_title("Ratio_log / cov")
-    else:
-        if titles[0]=="":
-            fig1.suptitle('No maximum coverage')
-        else:
-            fig1.suptitle(titles[0])
-        if titles[1]=="":
-            ax1.set_title("#k-mers / cov")
-        else:
-            ax1.set_title(titles[1])
-        if titles[2]=="":
-            ax2.set_title("Ratio / cov")
-        else:
-            ax2.set_title(titles[2])
-        if titles[3]=="":
-            ax3.set_title("ln(#k-mers) / cov")
-        else:
-            ax3.set_title(titles[3])
-        if titles[4]=="":
-            ax4.set_title("Ratio_log / cov")
-        else:
-            ax4.set_title(titles[4])
-    ax3.set_xlabel("Coverage")
-    ax1.set_xlabel("Coverage")
-    ax2.set_xlabel("Coverage")
-    ax4.set_xlabel("Coverage")
-    ax1.set_ylabel("#k-mers")
-    ax3.set_ylabel("ln(#k-mers)")
-    ax2.set_ylabel("Ratio")
-    ax4.set_ylabel("Ratio on log scale")
-    ax1.grid()
-
-    kmersInGraph = [0 if x==0 else log(x) for x in kmersInGraph]
-    kmersInBF = [0 if x==0 else log(x) for x in kmersInBF]
-    ax3.axhline(y=log(sizeOfGenome/2),label="#k-mers in genome")
-    ax3.plot(cov,kmersInBF,"k-",label="#k-mers in BF")
-    ax3.plot(cov,kmersInGraph,"k--",label='#k-mers in G')
-    if L==10:
-        kmersInGraph_s = [0 if x==0 else log(x) for x in kmersInGraph_s]
-        ax3.plot(cov,kmersInGraph_s,"r--",label='#With BF_stopper')
-    x1,x2,y1,y2 = ax3.axis()
-    ax3.axis((x1,max(cov),y1,y2))
-    ax3.legend(loc='lower right', bbox_to_anchor=(1.2, -0.05))
-    ax3.grid()
-
-    ax2.axhline(y=1,label="99.99% ratio")
-    ax2.plot(cov,BF_ratio,"k-",label="ratio in BF")
-    ax2.plot(cov,G_ratio,"k--",label='ratio in G')
-    if L==10:
-        ax2.plot(cov,G_ratio_s,"r--",label='With BF-stopper')
-    x1,x2,y1,y2 = ax2.axis()
-    ax2.axis((x1,max(cov),y1,1.1))
-
-    ratio_1_log_scale = -log(1-0.9999)
-    G_ratio = [ratio_1_log_scale if x==1 else -log(1-x) for x in G_ratio]
-    BF_ratio = [ratio_1_log_scale if x==1 else -log(1-x) for x in BF_ratio]
-    ax4.axhline(y=ratio_1_log_scale,label="99.99% ratio")
-    ax4.plot(cov,BF_ratio,"k-",label="ratio in BF")
-    ax4.plot(cov,G_ratio,"k--",label='ratio in G')
-    if L==10:
-        G_ratio_s = [ratio_1_log_scale if x==1 else -log(1-x) for x in G_ratio_s]
-        ax4.plot(cov,G_ratio_s,"r--",label='With BF-stopper')
-    x1,x2,y1,y2 = ax4.axis()
-    ax4.axis((x1,max(cov),y1,y2))
-    ax2.legend(loc='lower right', bbox_to_anchor=(1.1, 0))
-
-    #if outFolder=="":
-    #    print "Using default outFolder inside helpers.createFigureFromFile"
-    #    outFolder = 'Output/defaultOutFolder'
-    fig1.savefig(outFolder+"/"+genomeName+"_maxCov_"+str(maxCov)+".png", bbox_inches='tight')
-    f.close()
-
-
-
-def printAllInfoFromFiles(fn,k):
+def printAllInfoFromFiles(fn,k,BF):
+    print "helpers.printAllInfoFromFiles(fn,k,BF)"
     kd = collections.defaultdict(int)       #Stores all kmers in the files
     kd_BF = collections.defaultdict(int)    #Stores all kmers in the files
                                             #seen for the second time according to BF
     numberOfKmers = 0
-    BF = Bloom.Bloom(0.01,6000000,pfn=True)
     print "Running through the files:"
     for f in fn:
         h = open(f, "rU")
         for lineNr,line in enumerate(h):
             if (lineNr%4 == 1):
                 segments = filter(lambda x: len(x)>=k,line.strip().split("N"))
-                if len(segments)>1:
-                    print "lineNr="+str(lineNr)+", segments:",segments, "len(segments)="+str(len(segments))
                 for s in segments:
                     for km in dbg.kmers(s,k):
-                        kd[km] += 1
                         numberOfKmers += 1
-                        if not km in BF:
-                            BF.add(km)
+                        rep_km = min(km,dbg.twin(km))
+                        #kd[rep_km] += 1
+                        if not rep_km in BF:
+                            BF.add(rep_km)
                         else:
-                            kd_BF[km] += 1
-                    for km in dbg.kmers(dbg.twin(s),k):
-                        kd[km] += 1
-                        numberOfKmers +=1
-                        if not km in BF:
-                            BF.add(km)
-                        else:
-                            kd_BF[km] += 1
-
+                            kd_BF[rep_km] += 1
+    print "Done running through the files"
     G_twice = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False,printInit=True)
     numberOfAtLeastTwice = 0
     for km,num in kd.iteritems():
@@ -190,20 +60,20 @@ def printAllInfoFromFiles(fn,k):
             G_twice.addSegmentToGraph(km)
             numberOfAtLeastTwice += 1
     G_BF = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False,printInit=True)
-    for km,num in kd_BF.iteritems():
+    for km in kd_BF:
         G_BF.addSegmentToGraph(km)
     
-    print "Total number of kmers in the files:                  ", numberOfKmers
-    print "Number of unique kmers in the files:                 ", len(kd)
-    print "Number of kmers in the BF:                           ", len(BF)
-    print "Number of kmers occuring at least twice in the files: ", numberOfAtLeastTwice
-    print "Same number according to BF:                          ", len(kd_BF)
-    print "Number of kmers in G_twice:                           ", len(G_twice.kmers)
-    print "Number of contigs in G_twice:                          ", len(G_twice)
-    print "Number of kmers in G_BF:                              ", len(G_BF.kmers)
-    print "Number of contigs in G_BF:                            ", len(G_BF)
+    print "\n"
+    print "Total number of kmers in the files (with duplicates): %9i" % numberOfKmers
+    print "Number of unique kmers in the files:                  %9i" % len(kd)
+    print "Number of kmers in the BF:                            %9i" % len(BF)
+    print "Number of kmers occuring at least twice in the files: %9i" % numberOfAtLeastTwice
+    print "Same number according to BF:                          %9i" % len(kd_BF)
+    print "Number of kmers in G_twice:                           %9i" % len(G_twice.kmers)
+    print "Number of contigs in G_twice:                         %9i" % len(G_twice)
+    print "Number of kmers in G_BF:                              %9i" % len(G_BF.kmers)
+    print "Number of contigs in G_BF:                            %9i" % len(G_BF)
     print BF
-    BF.print_bitarray()
 
 def createKmerDictFromSegmentList(SL,k):
     kd = collections.defaultdict(int)
@@ -227,7 +97,8 @@ def file_len(fname):
     return i + 1
 
 if __name__ == "__main__":
-    pass
-    #changeFile("Output/testfile.csv",[0]*21,[0]*21)
-    #createFigureFromFile("Output/defaultOutFolder/Without_BF_stopper/figureData.csv",sizeOfGenome=70000,titles=["","","","",""],outFolder="")
-    #createFigureFromFile("Output/defaultOutFolder/BF_stopper/maxCov_5/figureData.csv",sizeOfGenome=70000,titles=["","","","",""],outFolder="Output/defaultOutFolder/BF_stopper/maxCov_5")
+    k = 31
+    fn = ["Input/Staphylococcus_aureus/frag_1.fastq", "Input/Staphylococcus_aureus/frag_2.fastq"]
+    fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
+    BF = Bloom.Bloom(0.01,8000000,pfn=True)
+    printAllInfoFromFiles(fn,k,BF)

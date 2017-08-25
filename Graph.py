@@ -34,6 +34,7 @@ class Graph:
 		self.printStatus = ps
 		self.assertLegal = al
 		self.printIsLegal = pil
+		self.smartSplit = False		#When self.smartSplit==True then we only split a contig when we have been told to do so before
 
 	def __len__(self):
 		return len(self.contigs)
@@ -195,6 +196,7 @@ class Graph:
 		temp = self.contigs[ID]
 		temp[2].append(OUT_tuple)
 
+	"""
 	#Before:	ID is the ID of a contig c in the graph
 	#			IN_tuple is a tuple. E.g. (0,True)
 	#After:		IN_tuple has been deleted from c's IN (if it is one of c's IN)
@@ -217,6 +219,7 @@ class Graph:
 				OUT.remove(OUT_tuple)
 				break
 		self.contigs[ID] = [c,IN,OUT,COV]
+	"""
 
 	def ID_has_IN(self,ID,IN_tuple):
 		return IN_tuple in self.contigs[ID][1]
@@ -226,14 +229,14 @@ class Graph:
 
 
 	def addKmersFromAllContigs(self):
-		for ID, [c,IN,OUT,COV] in self.contigs.iteritems():
-			self.addKmersFromContig(ID,c)
+		for ID, values in self.contigs.iteritems():
+			self.addKmersFromContig(ID,values[0])
 
 	#Before: 	c is a contig with ID ID
 	#After:		all kmers from c and their twins have been added to the kmerDict
 	def addKmersFromContig(self,ID,c="-1"):
 		if c=="-1":
-			[c,IN,OUT,COV] = self.contigs[ID]
+			c = self.contigs[ID][0]
 		for i, km in enumerate(dbg.kmers(c,self.k)):
 			self.kmers[km] = [ID,i,True]
 		for i, km in enumerate(dbg.kmers(dbg.twin(c),self.k)):
@@ -243,7 +246,7 @@ class Graph:
 	#After:		all kmers from c and their twins have been deleted from self.kmers
 	def deleteKmersFromContig(self,ID,c="-1"):
 		if c=="-1":
-			[c,IN,OUT,COV] = self.contigs[ID]
+			c = self.contigs[ID][0]
 		for km in dbg.kmers(c,self.k):
 			if km in self.kmers:
 				del self.kmers[km]
@@ -648,10 +651,10 @@ class Graph:
 			self.contigs[bID][2].append((aID,True))
 			self.contigs[aID][1].append((bID,True))
 		#update COV:
-		[a,a_IN,a_OUT,a_COV] = self.contigs[aID]
-		[b,b_IN,b_OUT,b_COV] = self.contigs[bID]
-		self.increaseCOV_by(aID, int(((self.k-1)/float(len(b)))*b_COV))
-		self.increaseCOV_by(bID, int(((self.k-1)/float(len(a)))*a_COV))
+		#[a,a_IN,a_OUT,a_COV] = self.contigs[aID]
+		#[b,b_IN,b_OUT,b_COV] = self.contigs[bID]
+		#self.increaseCOV_by(aID, int(((self.k-1)/float(len(b)))*b_COV))
+		#self.increaseCOV_by(bID, int(((self.k-1)/float(len(a)))*a_COV))
 
 
 
@@ -699,14 +702,16 @@ class Graph:
 		self.changeID_ofConnections(ID,ID_new)
 
 		#initialize self.contigs[ID_new] with the same values as self.contigs[ID]:
-		[c,IN,OUT,COV] = self.contigs[ID]
-		self.contigs[ID_new] = [c,IN,OUT,COV]
+		#[c,IN,OUT,COV] = self.contigs[ID]
+		#self.contigs[ID_new] = [c,IN,OUT,COV]
+		temp = self.contigs[ID]
+		self.contigs[ID_new] = temp
 
 		#delete self.contigs[ID] from the graph
 		del self.contigs[ID]
 
 		#add the kmers from c again (now with ID_new)
-		self.addKmersFromContig(ID_new,c)
+		self.addKmersFromContig(ID_new,temp[0])
 
 		self.setID(max(ID_new+1,self.ID))
 
@@ -725,11 +730,11 @@ class Graph:
 	def changeID_findConnections(self,ID):
 		if self.printFunctionNames:
 			print "changeID_findConnections(ID="+str(ID)+")"
-		[c,IN,OUT,COV] = self.contigs[ID]
+		temp = self.contigs[ID]
 		conns = []	#a list of the IDs of all the contigs that c connects to
-		for (i_ID,i_B) in IN:
+		for (i_ID,i_B) in temp[1]:
 			conns.append(i_ID)
-		for (i_ID,i_B) in OUT:
+		for (i_ID,i_B) in temp[2]:
 			conns.append(i_ID)
 		return conns
 
@@ -877,12 +882,17 @@ class Graph:
 		start = 0
 		tmp = collections.defaultdict(list)
 		for i, km in enumerate(dbg.kmers(segment,self.k)):
-			if not ((km in self.kmers) or (km in tmp)):
-				#We have not seen this kmers before
+			B1 = km in self.kmers
+			B2 = km in tmp
+			if not (B1 or B2):
+				#We have not seen this kmer before
 				tmp[km] = [None,None,None]
 				tmp[dbg.twin(km)] = [None,None,None]
 			else:
 				#We have seen this kmer before
+				if B1:
+					[contigID, index, B] = self.kmers[km]
+					self.contigs[contigID][3] += 1
 				if i-start>=1:
 					self.addSegmentWithNoSeenKmers(segment[start:i-1+self.k])
 				start = i+1

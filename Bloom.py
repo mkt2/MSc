@@ -35,14 +35,14 @@ class Bloom:
 		return int( float(-self.m)/self.k * log(1.0-self.bitarray.count()/float(self.m)) )
 
 	def __str__(self):
+		ratio,cZero,cOne = self.computeRatio()
 		return \
-		"\nPrinting the Bloom BF (except ratio):" \
+		"\nPrinting the Bloom BF:" \
 		+   "  p:          "+str(self.p) \
 		+"\n  k:          "+str(self.k) \
 		+"\n  m:          "+str(self.m) \
-		+"\nAdded "+str(len(self))+" kmers\n"
-		+"\n"
-
+		+"\nAdded "+str(len(self))+" kmers" \
+		+"\nRatio: "+str(ratio)+"\n\n"
 
 	def computeRatio(self):
 		cZero = 0

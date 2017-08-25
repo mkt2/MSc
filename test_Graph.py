@@ -131,6 +131,7 @@ class Test_addINandOUT(unittest.TestCase):
         G_correct.contigs[G_correct.getID()] = ["AAC",[(0,True)],[],0]
         self.allIsEqual(G1,G_correct)
 
+"""
 class Test_deleteINandOUT(unittest.TestCase):
     def allIsEqual(self,G1,G2):
         for index in G1.contigs:
@@ -166,10 +167,7 @@ class Test_deleteINandOUT(unittest.TestCase):
         G1.addKmersFromAllContigs()
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G1,G_correct,alsoCompareWithNaive=False))
-
-#Before:    c is a contig with ID ID
-#After:     all kmers from c and their twins have been added to the kmerDict
-#def addKmersFromContig(self,ID,c="-1"):
+"""
 
 class Test_kmerFunctions(unittest.TestCase):
     def test_1(self):

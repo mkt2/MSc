@@ -34,21 +34,33 @@ class Bloom:
 		#return self.count	<--- this is the old approximation
 		return int( float(-self.m)/self.k * log(1.0-self.bitarray.count()/float(self.m)) )
 
+
+#print "\nYour Celsius value is {:0.2f}ºC.\n".format(answer)
+#print "{:d} {:03d} {:>20f}".format(1,2,1.1)
 	def __str__(self):
 		ratio,cZero,cOne = self.computeRatio()
 		return \
 		"\nPrinting the Bloom BF:" \
-		+   "  p:          "+str(self.p) \
-		+"\n  k:          "+str(self.k) \
-		+"\n  m:          "+str(self.m) \
-		+"\nAdded "+str(len(self))+" kmers" \
-		+"\nRatio: "+str(ratio)+"\n\n"
+		+"\n         p: {:10.2f}".format(self.p) \
+		+"\n         k: {:10.0f}".format(self.k) \
+		+"\n         m: {:10.0f}".format(self.m) \
+		+"\n     Added: {:10.0f} k-mers".format(len(self)) \
+		+"\nRatio of 1: {:10.2f}\n\n".format(round(ratio,2)) \
+	#def __str__(self):
+	#	ratio,cZero,cOne = self.computeRatio()
+	#	return \
+	#	"\nPrinting the Bloom BF:" \
+	#	+"\n         p:         "+str(self.p) \
+	#	+"\n         k:          "+str(self.k) \
+	#	+"\n         m:   "+str(self.m) \
+	#	+"\n     Added:     "+str(len(self))+" kmers" \
+	#	+"\nRatio of 1:   "+str(round(ratio,2))+"\n\n"
 
 	def computeRatio(self):
 		cZero = 0
 		cOne = self.bitarray.count()
 		cZero = len(self.bitarray) - cOne
-		ratio = float(cOne)/(cZero+cOne)
+		ratio = round(float(cOne)/(cZero+cOne),2)
 		if ratio >= 0.5:
 			assert cOne>=cZero
 		else:

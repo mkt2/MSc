@@ -6,101 +6,80 @@ from shutil import copyfile
 import fileinput
 import numpy as np
 import matplotlib.pyplot as plt
-from math import log
+from math import log, exp, pow
 import time
 
 alphabet = ["A","C","G","T","N"]
 
 class infoKeeper:
-	def __init__(self,fn,k,outDirectory,genomeFile):
+	def __init__(self,outDirectory,preprocFiles,kmersInGenome=-1):
 		print "Initializing the infoKeeper"
+		#Stuff we need to keep track of for the pictures:
 		self.cov = []
 		self.num_kmers_InGraph_noMaxCov = []
 		self.num_kmers_InBF_noMaxCov = []
 		self.G_ratio_noMaxCov = []
 		self.BF_ratio_noMaxCov = []
-		self.num_kmersPerLine = -1
-		self.sampleDensity = -1
-		self.kmersInGenome = collections.defaultdict(int)
-		self.num_kmers_in_genome_counted = -1		#The computed size of the genome
-											#Why isn't this the same number?
+		
+		#Other stuff we need to initialize:
 		self.outDirectory = outDirectory
-		self.noMaxCovFile = "figureData_maxCov_-1.csv"
-		self.noMaxCovFilePath = self.outDirectory+"/"+self.noMaxCovFile
-		self.genomeName = os.path.dirname(genomeFile).split("/")[-1]
+		#self.noMaxCovFile = "figureData_maxCov_-1.csv"
+		#self.noMaxCovFilePath = self.outDirectory+"/"+self.noMaxCovFile
+		#self.genomeName = os.path.dirname(genomeFile).split("/")[-1]
 		self.maxCov = -1	#max coverage for adding to bloom filter
 		self.maxCov2 = -1	#max coverage for splitting
+
+		#Stuff we read directly from the genome info file
+		genomeInfo = helpers.readGenomeInfoFromFile(preprocFiles[0])
+		self.genomeName = genomeInfo[0]
+		self.k = int(genomeInfo[1])
+		self.numKmersInGenome = int(genomeInfo[2])
+		self.numReadsPerFile = int(genomeInfo[3])
+		self.numKmersPerRead = int(genomeInfo[4])
+		self.numKmersInReads = int(genomeInfo[5])
+		self.numKmersInReads_twice = int(genomeInfo[6])
+		self.numKmersInReads_twice_BF = int(genomeInfo[7])
+
+		#A dict storing every k-mer in the genome:
+		if kmersInGenome==-1:
+			self.kmersInGenome = helpers.readKmersFromFileToDict(preprocFiles[1])
+		else:
+			self.kmersInGenome = kmersInGenome
+
+		#Stuff we can calculate from the info initialized above:
+		self.num_kmers_in_genome_counted = self.numKmersInGenome
+		numberOfMeasurements = 10
+		self.sampleDensity = self.numReadsPerFile/(numberOfMeasurements-1)
 		
-		#Create the files where to save the output
+		#Create the output directory if it didn't already exist
 		if not os.path.exists(self.outDirectory):
 			os.makedirs(self.outDirectory)
-
-		#Create values for:
-		#	self.num_kmersPerLine
-		#	self.sampleDensity
-		numberOfMeasurements=10
-		f = fn[0]
-		numberOfLines  = helpers.file_len(f)
-		numberOfReads = int(numberOfLines/4)
-		h = open(f, "rU")
-		line = h.readline()
-		line = h.readline()
-		self.num_kmersPerLine = len(list(dbg.kmers(line,k)))
-		h.close()
-		if numberOfMeasurements==-1:
-			numberOfMeasurements = 10
-		self.sampleDensity = numberOfReads/(numberOfMeasurements-1)
-
-		#Create values for:
-		#	self.kmersInGenome
-		#	self.num_kmers_in_genome_counted
-		genomeFileExtension = os.path.splitext(genomeFile)[1]
-		g = open(genomeFile, "rU")
-		if genomeFileExtension==".fa":
-			line = g.readline()
-			line = g.readline().strip()
-			for km in dbg.kmers(line,k):
-				self.kmersInGenome[min(km,dbg.twin(km))] += 1
-		elif genomeFileExtension==".fasta":
-			line = g.readline()
-			for line in g:
-				line = line.strip()
-				line = line if all([c in alphabet for c in line]) else ""
-				tl = dbg.twin(line)
-				for km in dbg.kmers(line,k):
-					self.kmersInGenome[min(km,dbg.twin(km))] += 1
-		else:
-			raise Exception("genomeFile does not have a legal extension. genomeFile="+str(genomeFile))
-		self.num_kmers_in_genome_counted = len(self.kmersInGenome)
-		g.close()
-
-		print "genomeName:",self.genomeName
-		print "length_of_t:                   70000"
-		print "Number of bp in S_aureus:    2903081"
-		print "num_kmers_in_genome_counted: %7i" % self.num_kmers_in_genome_counted
 	
+	#When we have gathered all information about the current maxCov value
+	#we call this function to update the maxCov and get ready to find all
+	#information about the new maxCov value
 	def setMaxCov(self,newMaxCov):
 		self.maxCov = newMaxCov
-		#self.maxCovFile = "figureData_maxCov_"+str(maxCov)+".csv"
-		#self.maxCovFilePath = self.outDirectory+"/"+self.maxCovFile
-		#if not os.path.isfile(self.noMaxCovFilePath):
-		#	raise Exception("This file is supposed to store the noMaxCovFile already created when running BF_counter with maxCov=-1")
 		self.num_kmers_InGraph_maxCov = []
 		self.G_ratio_maxCov = []
 
+	#Add the next values about our current maxCov to the lists of 
+	#things we need to store for the figures
 	def append(self,G,BF,cov):
-		#print "append(len(G)="+str(len(G))+", len(BF)="+str(len(BF))+", cov="+str(cov)+")"
-		g,bf = self.ratioInGenome(G,BF)
+		g_fraction = helpers.fractionFromGenomeInObject(self.kmersInGenome,self.numKmersInGenome,Object=G,isGraph=1)
+		#g,bf = self.ratioInGenome(G,BF)
 		if self.maxCov==-1:
+			bf_fraction = helpers.fractionFromGenomeInObject(self.kmersInGenome,self.numKmersInGenome,Object=BF,isGraph=0)
 			self.cov.append(cov)
 			self.num_kmers_InGraph_noMaxCov.append(G.numKmerPairs())
 			self.num_kmers_InBF_noMaxCov.append(len(BF))
-			self.G_ratio_noMaxCov.append(g)
-			self.BF_ratio_noMaxCov.append(bf)
+			self.G_ratio_noMaxCov.append(g_fraction)
+			self.BF_ratio_noMaxCov.append(bf_fraction)
 		else:
 			self.num_kmers_InGraph_maxCov.append(G.numKmerPairs())
-			self.G_ratio_maxCov.append(g)
-		
+			self.G_ratio_maxCov.append(g_fraction)
+	
+	#fractionFromGenomeInObject(kmersInGenome,numKmersInGenome,Object,isGraph=1)
 
 	#Input:
 	#   kmerdict:  A dict storing all kmers actually occurring in the genome. Also stores twins
@@ -109,6 +88,7 @@ class infoKeeper:
 	#Returns:
 	#   The ratio of kmers in the genome that occur in G
 	#   The ratio of kmers in the genome that occur in BF
+	'''
 	def ratioInGenome(self,G,BF):
 		G_count = 0
 		BF_count = 0
@@ -122,6 +102,7 @@ class infoKeeper:
 		assert G_ratio>=0 and G_ratio<=1, "A ratio must be between 0 and 1"
 		assert BF_ratio>=0 and BF_ratio<=1, "A ratio must be between 0 and 1"
 		return G_ratio,BF_ratio
+	'''
 
 	def printResults(self):
 		self.createFigure()
@@ -141,11 +122,22 @@ class infoKeeper:
 		"""
 
 	def createFigure(self):
+		def toLogScale(myList,ratio_1_log_scale):
+			return [ratio_1_log_scale if x==1 else -log(1-x) for x in myList]
+
+		#C: Coverage
+		#N: Number of k-mers in the genome
+		def lw(C,N):
+			out = (1-exp(-C))#*N
+			assert out>=0
+			assert out<=1
+			return out
+
 		#print "IK.createFigure()"
 		#Initialize the plot:
-		fig, (ax1,ax2) = plt.subplots(1,2)
+		fig, (ax1,ax2) = plt.subplots(2,1)
 		#fig1.subplots_adjust(hspace=.5)
-		fig.subplots_adjust(wspace=.5)
+		#fig.subplots_adjust(wspace=2)
 
 		#Plot on the subplot to the left
 		ax1.axhline(y=self.num_kmers_in_genome_counted,label="Genome")
@@ -157,19 +149,30 @@ class infoKeeper:
 		#Plot on the subplot to the right:
 		ratio_1_log_scale = -log(1-0.9999)
 		ax2.axhline(y=ratio_1_log_scale,label="99.99% ratio")
-		BF_ratio_noMaxCov_log = [ratio_1_log_scale if x==1 else -log(1-x) for x in self.BF_ratio_noMaxCov]
-		G_ratio_noMaxCov_log = [ratio_1_log_scale if x==1 else -log(1-x) for x in self.G_ratio_noMaxCov]
+		#BF_ratio_noMaxCov_log = [ratio_1_log_scale if x==1 else -log(1-x) for x in self.BF_ratio_noMaxCov]
+		BF_ratio_noMaxCov_log = toLogScale(self.BF_ratio_noMaxCov,ratio_1_log_scale)
+		#G_ratio_noMaxCov_log = [ratio_1_log_scale if x==1 else -log(1-x) for x in self.G_ratio_noMaxCov]
+		G_ratio_noMaxCov_log = toLogScale(self.G_ratio_noMaxCov,ratio_1_log_scale)
 		ax2.plot(self.cov,BF_ratio_noMaxCov_log,"k-",label="BF. noMaxCov")
 		ax2.plot(self.cov,G_ratio_noMaxCov_log,"k--",label='G. noMaxCov')
 		x1,x2,y1,y2 = ax2.axis()
 		ax2.axis((x1,max(self.cov),y1,y2))
+		#Bætum lw við myndirnar:
+		G_lw = [lw(C,self.num_kmers_in_genome_counted) for C in self.cov]
+		G_lw_log = toLogScale(G_lw,ratio_1_log_scale)
+		#for i in range(0,len(self.cov)):
+		#	print self.cov[i],G_lw[i],G_lw_log[i]
+		ax2.plot(self.cov,G_lw_log,"g-",label='G.lw')
+		
+		#print G_lw_log
 
 		#Plot the red lines (if we're using a stop filter):
 		if self.maxCov!=-1:
-			ax1.plot(self.cov,self.num_kmers_InGraph_maxCov,"r--",label='G. maxCov='+str(maxCov))
+			ax1.plot(self.cov,self.num_kmers_InGraph_maxCov,"r--",label='G. maxCov='+str(self.maxCov))
 			G_ratio_maxCov_log = [ratio_1_log_scale if x==1 else -log(1-x) for x in self.G_ratio_maxCov]
-			ax2.plot(self.cov,G_ratio_maxCov_log,"r--",label='G. maxCov='+str(maxCov))
+			ax2.plot(self.cov,G_ratio_maxCov_log,"r--",label='G. maxCov='+str(self.maxCov))
 
+		#Setjum tölur inn á gröfin við hliðina á línunum:
 		ax1.annotate(' %i' % (self.num_kmers_in_genome_counted), xy=(0,0), xytext=(max(self.cov),self.num_kmers_in_genome_counted))
 		ax2.annotate(' %0.2f' % ratio_1_log_scale, xy=(0,0), xytext=(max(self.cov),ratio_1_log_scale))
 		if self.maxCov==-1:
@@ -193,16 +196,19 @@ class infoKeeper:
 		ax2.set_ylabel("-log(1-Ratio)")
 		ax1.grid()
 		ax2.grid()
-		ax1.legend(loc='upper left')#, bbox_to_anchor=(1.2, -0.05))
-		ax2.legend(loc='lower right')#, bbox_to_anchor=(1.1, 0))
+		ax1.legend(loc='upper left', prop={'size': 9})#, bbox_to_anchor=(1.2, -0.05))
+		ax2.legend(loc='lower right', prop={'size': 9})#, bbox_to_anchor=(1.1, 0))
 		
+		plt.tight_layout()
 		#Set figure title and save the figure
 		if self.maxCov==-1:
-			fig.suptitle(self.genomeName+". No maximum coverage")
-			fig.savefig(self.outDirectory+"/"+self.genomeName+"_maxCov_"+str(maxCov)+".png", bbox_inches='tight')
+			fig.suptitle(self.genomeName+". No maximum coverage", y=1.01)
+			fig.savefig(self.outDirectory+"/"+self.genomeName+"_maxCov_"+str(self.maxCov)+".png", bbox_inches='tight')
 		else:
-			fig.suptitle(self.genomeName+". maxCov="+str(maxCov))
-			fig.savefig(self.outDirectory+"/"+self.genomeName+"_maxCov_"+str(maxCov)+".png", bbox_inches='tight')
+			fig.suptitle(self.genomeName+". maxCov="+str(self.maxCov), y=1.01)
+			fig.savefig(self.outDirectory+"/"+self.genomeName+"_maxCov_"+str(self.maxCov)+".png", bbox_inches='tight')
+
+		
 
 #dasdf
 #Inputs:
@@ -214,21 +220,16 @@ class infoKeeper:
 #whatToRun=1: Keyra BF_counter
 def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0,skipPictures=False):
 	if pfn:
-		#print "BF_counter",locals().keys(),"\n"
 		print "BF_counter",locals()
-		#print "geraAllt(fn="+str(fn)+", k="+str(k)+", BF, G, pfn="+str(pfn)+", printProgress="+str(printProgress)+", startAtLine="+str(startAtLine)+")"
 	if not isinstance(fn, list):
 		print "fn:",fn
 		raise Exception('fn has to be a list')
 	if maxCov!=-1:
 		IK.setMaxCov(maxCov)
 	sampleDensity = IK.sampleDensity
-	covFactor = float(IK.num_kmersPerLine) / IK.num_kmers_in_genome_counted
+	covFactor = (float(IK.numKmersPerRead) / IK.num_kmers_in_genome_counted) * pow(1-0.005,k)
 	cov = 0		#Hversu oft við höfum séð hvern k-mer að meðaltali
 	count = 0
-	#kd_twice_BF = collections.defaultdict(int)			#A dict storing every kmer that we see twice according to the BF
-	#kd_twice = collections.defaultdict(int)			#A dict storing every kmer we actually see twice
-	#													len(kd_twice_BF)<=len(kd_twice)*1.01 should be true. Otherwise the BF code is not working
 	for f in fn:
 		h = open(f, "rU")
 		for lineNr,line in enumerate(h,start=startAtLine):
@@ -249,8 +250,6 @@ def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0,s
 					#á "sampleDensity" segmenta fresti þá mælum við fjölda k-mera í
 					#G og BF ásamt coverage og geymum niðurstöðurnar
 					if (not skipPictures) and (count%sampleDensity==0):
-						#if printProgress:
-						#	print "Taking a sample. LineNr="+str(lineNr)+", count="+str(count)
 						IK.append(G,BF,cov)
 
 					#Bætum öllum k-merum úr s við BF
@@ -266,47 +265,26 @@ def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0,s
 					start = 0
 					for i, kmer in enumerate(dbg.kmers(s,k)):
 						rep_kmer = min(kmer,dbg.twin(kmer))
-						#if not rep_kmer in BF:
+						#Check whether rep_kmer was in BF. Add it if it wasn't
 						if not BF.kmerInBF_also_AddIf_B_is_True(rep_kmer,add_moreToBF):
-							#if add_moreToBF:
-							#	BF.add(rep_kmer)
-							if i-start>0:
+							#rep_kmer wasn't in BF but has now been added
+							if i>start:
+								#Add the current goodSequence to G
 								goodSequence = s[start:i+k-1]
 								G.addSegmentToGraph(goodSequence)
 							start = i+1
-						"""
-						else:
-							if add_moreToBF:
-								kd_twice_BF[rep_kmer] += 1
-						if add_moreToBF:
-							kd_twice[rep_kmer] += 1
-						"""
 					#If we reach the end of segment we add the current sequence
 					if L-start>=k:
 						G.addSegmentToGraph(s[start:])
 				count += 1
 				cov = count * covFactor
+				#cov = N * L / G
 		if not skipPictures:
 			#Geymum einnig niðurstöðurnar í lokin
 			IK.append(G,BF,cov)
 	if not skipPictures:
 		#Prentum niðurstöðurnar í skrá sem við getum notað síðar til að búa til mynd
 		IK.printResults()
-	"""
-	if add_moreToBF:
-		print "\nThere are "+str(len(kd_twice_BF))+" kmers we saw >=2 times according to the BF"
-		print "We raise assertion if there aren't equally many kmers in G"
-		assert len(kd_twice_BF)==G.numKmerPairs()
-		print "There are "+str(len(kd_twice))+" kmers actually in the reads"
-		temp = [x for x in kd_twice if kd_twice[x] <= 1]
-		for x in temp:
-			del kd_twice[x]
-		print "There are "+str(len(kd_twice))+" kmers we actually saw >=2 times"
-		for km in kd_twice:
-			assert km in BF, "Every kmer we actually saw twice should be in the BF (otherwise we have a False Negative)"
-		print "len(kd_twice_BF)/len(kd_twice)="+str(float(len(kd_twice_BF))/len(kd_twice))+". It should be less than p="+str(p)
-		#assert len(kd_twice_BF)<=len(kd_twice)*1.01, "len(kd_twice_BF)/len(kd_twice)="+str(float(len(kd_twice_BF))/len(kd_twice))+" but should be less than p="+str(p)
-	"""
 
 def BF_counter_naive(fn,BF,k,G_naive,pfn=True,printProgress=False):
 	if pfn:
@@ -342,32 +320,55 @@ def BF_counter_naive(fn,BF,k,G_naive,pfn=True,printProgress=False):
 	dbg.createGraphObject(G,cs,k,G_naive,pfn,ps=False)
 	print "Number of kmers in G_naive:",len(G_naive.kmers)
 
+#Need to run preprocessInput.py before running this file
 if __name__ == "__main__":
-	#python simData.py 31 Input/t/r1.fastq Input/t/r2.fastq 6000000 1 $maxCov True False Input/t/t.fa Output/t
-	#python -m cProfile -s cumtim BF_counter.py
-	start = time.time()
-	k = 31
-	maxCovs = [-1, 5, 10, 15, 20, 30, 35, 40, 45, 50]
-	fn = ["Input/Staphylococcus_aureus/frag_1.fastq", "Input/Staphylococcus_aureus/frag_2.fastq"]
-	genomeFile = "Input/Staphylococcus_aureus/genome.fasta"
-	numberOfKmers = 100000000
-	fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
-	genomeFile = "Input/t/t.fa"
-	numberOfKmers = 8000000
-	p = 0.01
-	start_printInfo = time.time()
-	BF = Bloom.Bloom(p,numberOfKmers,pfn=False)
-	helpers.printAllInfoFromFiles(fn,k,BF)
-	end_printInfo = time.time()
-	print "Done gathering info from the files"
-	print helpers.returnTime(int(end_printInfo-start_printInfo))
-	genomeName = os.path.dirname(genomeFile).split("/")[-1]
-	outDirectory = "Output/"+os.path.dirname(genomeFile).split("/")[-1]
-	IK = infoKeeper(fn,k,outDirectory,genomeFile)
+	#This function initializes our values for maxCov, fn, genomeFile and 
+	#numberOfKmers depending on which genome we're using. I.e. t or s aureus
+	def selectGenome(genomeName):
+		if genomeName=="t":
+			maxCovs = [-1, 5, 10, 15, 20, 30]
+			fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
+			#genomeFile = "Input/t/t.fa"
+			numberOfKmers = 8000000
+		elif genomeName=="sa":
+			maxCovs = [-1, 5, 10, 15, 20, 30, 35, 40, 45, 50]
+			fn = ["Input/Staphylococcus_aureus/frag_1.fastq", "Input/Staphylococcus_aureus/frag_2.fastq"]
+			#genomeFile = "Input/Staphylococcus_aureus/genome.fasta"
+			numberOfKmers = 100000000
+		else:
+			raise Exception("The genomeName must be either 't' or 'sa'!")
+		return maxCovs, fn, numberOfKmers
+
+	
+	#Veljum hvort genome-ið við erum að vinna með og skilgreinum
+	#breytur sem tengjast eingöngu þessu main falli
+	genomeName = sys.argv[1]
+	maxCovs, fn, numberOfKmers = selectGenome(genomeName)
+	runTimes = [-1]*len(maxCovs)
 	pfn = True
 	printProgress = False
-	start_i = time.time()
-	for maxCov in maxCovs:
+
+	#Skilgreinum breytur sem þarf að passa að séu þær sömu
+	#í þessu main falli, preproc skránum og IK
+	p = 0.01
+	outDirectory = "Output/"+genomeName
+	preprocFiles = [outDirectory+"/genome_info.csv",outDirectory+"/kmers_genome.txt",outDirectory+"/kmers_reads.txt"]
+	genomeInfo = helpers.readGenomeInfoFromFile(preprocFiles[0])
+	k = int(genomeInfo[1])
+	kmersInGenome = helpers.readKmersFromFileToDict(preprocFiles[1])
+	IK = infoKeeper(outDirectory,preprocFiles,kmersInGenome)
+	BF = Bloom.Bloom(p,numberOfKmers,pfn=False)
+	
+	#Keyrum BF_counter fyrir sérhvert maxCov og tökum tímana
+	#Búum einnig til tvær skrár fyrir hvert maxCov:
+	#Sleppum skrá 2
+	#	Skrá 1: Geymir alla k-mera í G fyrir núverandi maxCov
+	#	Skrá 2: Geymir mismengi k-meranna úr erfðamenginu og k-meranna í G
+	#Fyrir maxCov=5 verður nöfnin á skránum t.d:
+	#	Skrá 1: kmersFromG_maxCov_5.txt
+	#	Skrá 2: difference_Genome_G_maxCov_5.txt
+	start = time.time()
+	for i, maxCov in enumerate(maxCovs):
 		start_i = time.time()
 		print "\n-------------------------------------------------------"
 		print "Starting on maxCov="+str(maxCov)
@@ -376,11 +377,15 @@ if __name__ == "__main__":
 		assert len(G)==0
 		assert len(G.kmers)==0
 		BF_counter(fn,k,BF,G,IK,maxCov,pfn,printProgress,startAtLine=0,skipPictures=False)
-		end_i = time.time()
+		timeInSeconds = int(time.time()-start_i)
+		runTimes[i] = timeInSeconds
 		print BF
+		helpers.printKmerdictToFile(G.kmers,outDirectory+"/kmersFromG_maxCov_"+str(maxCov)+".txt")
+		#helpers.printKmerdictToFile(helpers.difference(kmersInGenome,G.kmers),outDirectory+"/difference_Genome_G_maxCov_"+str(maxCov)+".txt")
 		print "Finished maxCov="+str(maxCov)
-		print helpers.returnTime(int(end_i-start_i))
+		print helpers.returnTime(timeInSeconds)
 		print "-------------------------------------------------------\n"
 	print "Finished everything:"
-	print helpers.returnTime(int(end_i-start_i))
+	print helpers.returnTime(int(time.time()-start))
+	helpers.printRuntimesToFile(genomeName, maxCovs, runTimes)
     

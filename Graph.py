@@ -9,7 +9,7 @@ class Graph:
 			print "Initializing the Graph: k="+str(k)+", pfn="+str(pfn)+", ps="+str(ps)+", al="+str(al)+", pil="+str(pil)+", printInit="+str(printInit)
 		self.k = k 		#the kmer length
 		self.ID = 0		#the lowest available contig ID
-		self.halfAdded = -99	#a number representing that a kmer has
+		#self.halfAdded = -99	#a number representing that a kmer has
 								#not been fully added to the kmerDict
 
 		#contigID -> [contig, IN, OUT, coverage]

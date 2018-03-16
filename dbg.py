@@ -1,8 +1,11 @@
 import collections, sys
 import Graph
 
+alphabet = ["A","C","G","T","N"]
+
 def twin(km):
     #return Seq.reverse_complement(km)
+    #print km
     revcompl = lambda x: ''.join([{'A':'T','C':'G','G':'C','T':'A'}[B] for B in x][::-1])
     return revcompl(km)
 
@@ -18,48 +21,20 @@ def bw(km):
     for x in 'ACGT':
         yield x + km[:-1]
 
-"""
-def myParse(f,k):
-    h = open(f, "rU")
-    for i,line in enumerate(h):
-        if (i%4 == 1):
-            segments = filter(lambda x: len(x)>=k,line.strip().split("N"))
-            for s in segments:
-                yield s
-"""
-
-"""
-def myParse(f,k,startAtLine=0,pfn=False,printProgress=False):
-    if printProgress:
-        print "myParse(f="+str(f)+", k="+str(k)+", startAtLine="+str(startAtLine)+", printProgress="+str(printProgress)+")"
-    assert isinstance(startAtLine, int)
-    while not startAtLine%4==0:
-        startAtLine-=1
-        if printProgress:
-            print "startAtLine:",startAtLine
-    h = open(f, "rU")
-    for i,line in enumerate(h,start=startAtLine):   #We may be skipping some lines
-        #print i,line
-        if (i%4 == 1):
-            segments = filter(lambda x: len(x)>=k,line.strip().split("N"))
-            for s in segments:
-                if printProgress and (i%400==1):
-                    print "myParse is returning the segment from line "+str(i)+" from the file "+str(f)
-                yield s,i
-"""
-
-def build(readsFromFiles,k=31,limit=1):
+def build(fn,k=31,limit=1):
     d = collections.defaultdict(int)
 
-    for reads in readsFromFiles:
-        for seq_s in reads:
-            seq_l = seq_s.split('N')
-            for seq in seq_l:
-                for km in kmers(seq,k):
-                    d[km] += 1
-                seq = twin(seq)
-                for km in kmers(seq,k):
-                    d[km] += 1
+    for f in fn:
+        h = open(f, "rU")
+        for lineNr,line in enumerate(h):
+            if (lineNr%4 == 1):
+                segments = filter(lambda x: len(x)>=k and all([c in alphabet for c in x]),line.strip().split("N"))
+                for seq in segments:
+                    for km in kmers(seq,k):
+                        d[km] += 1
+                    seq = twin(seq)
+                    for km in kmers(seq,k):
+                        d[km] += 1
 
     d1 = [x for x in d if d[x] <= limit]
     for x in d1:
@@ -81,7 +56,6 @@ def get_contig(d,km):
         c = [twin(x) for x in c_bw[-1:0:-1]] + c_fw
     return contig_to_string(c),c
         
-
 def get_contig_forward(d,km):
     c_fw = [km]
     
@@ -138,10 +112,8 @@ def all_contigs(d,k):
 
     return G,r
 
-    
-
 def print_GFA(G,cs,k):
-    print "H  VN:Z:1.0"
+    print "H\tVN:Z:1.0"
     for i,x in enumerate(cs):
         print "S\t%d\t%s\t*"%(i,x)
         
@@ -233,11 +205,10 @@ def createGraphObject(G,cs,k,GraphObject,pfn=False,ps=False):
 
 if __name__ == "__main__":
     k = int(sys.argv[1])
-    fileReads = []
-    for f in sys.argv[2:]:
-        fileReads.append(myParse(f))    #index i stores a list of all reads from file i
-    d = build(fileReads,k,1)
+    d = build(sys.argv[2:],k,1)
     G,cs = all_contigs(d,k)
     print_GFA(G,cs,k)
-    GraphObject = createGraphObject(G,cs,k)
-    GraphObject.printContigs()    
+    GraphObject = Graph.Graph(k,al=False)
+    createGraphObject(G,cs,k,GraphObject)
+    GraphObject.saveAs_GFA_toFile("testGFA.gfa")
+    #GraphObject.printContigs()    

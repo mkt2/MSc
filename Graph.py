@@ -2,49 +2,59 @@
 import collections, sys
 import dbg
 import compareGraphs
-#an object of this class represents a legal DBG graph
+from math import ceil
+from sets import Set
+import helpers
+import Path
+
+#An object of this class represents a legal DBG graph
 class Graph:
 	def __init__(self,k,pfn=False,ps=False,al=True,pil=False,printInit=False):
+		assert(isinstance(k,int))
 		if printInit:
 			print "Initializing the Graph: k="+str(k)+", pfn="+str(pfn)+", ps="+str(ps)+", al="+str(al)+", pil="+str(pil)+", printInit="+str(printInit)
 		self.k = k 		#the kmer length
 		self.ID = 0		#the lowest available contig ID
-		#self.halfAdded = -99	#a number representing that a kmer has
-								#not been fully added to the kmerDict
-
-		#contigID -> [contig, IN, OUT, coverage]
+		
+		#dictionary of the contigs in our graph with information about which contigs they connect to:
 		self.contigs = collections.defaultdict(list)
-		#dictionary of the contigs in our graph with information
-		#over which contigs they connect to
-		#IN: List of tuples. Example: IN = [(0,True),(1,False),(99,True)]
+		#contigID -> [contig, IN, OUT, COV]
+		#IN:  List of tuples. Example: IN = [(0,True),(1,False),(99,True)]
 		#OUT: List of tuples
+		#COV: The total number of occurrences of the k-mers in the contig
+		#	  Note that when a k-mer is added for the first time we say it has occurred twice
+		#	  because it has to be seen twice to be added in the first place
+		#	  Example: Say we have a contig C of length k+3 (therefore containing 3 k-mers)
+		#	  Say the first k-mer has been added once, the second 10 times and the third two times
+		#	  COV will therefore be 2+11+3=16
+		#	  Note that we don't store the coverage of individual k-mers so when we do operations such
+		#	  as splitting contigs, then COV will become an estimation
 
-		#kmer -> [contigID, index, B]
-		#B=False:
-		#	kmer is in the twin of the contig with contigID
-		#	index represents its location in the twin
-		#B=True:
-		#	kmer is in the contig with contigID
-		#	index represents its location in the contig
+		#dictionary storing the kmers in our graph:
 		self.kmers = collections.defaultdict(list)
-		#dictionary of the kmers in our graph, and where each of them occurs
-		#in the contigs
-
+		#kmer -> [contigID, index, B]
+		#contigID is the ID of contig C with ID=contigID
+		#B=False:
+		#	kmer is in the twin of C
+		#	index represents its location in twin(C)
+		#B=True:
+		#	kmer is in C
+		#	index represents its location in C
+		
+		#Variables only used for debugging
 		self.printFunctionNames = pfn
 		self.printStatus = ps
 		self.assertLegal = al
 		self.printIsLegal = pil
-		self.smartSplit = False		#When self.smartSplit==True then we only split a contig when we have been told to do so before
+		#self.smartSplit = False		#When self.smartSplit==True then we only split a contig when we have been told to do so before
 
 	def __len__(self):
 		return len(self.contigs)
 
 	def __contains__(self,contig):
-		#this is a comment
 		return contig in self.contigs
 
-	def numKmerPairs(self):
-		return len(self.kmers)/2
+
 	#--------------------------------------------------------------------------
 	#--------------------------functions for printing--------------------------
 	#--------------------------------------------------------------------------
@@ -59,57 +69,6 @@ class Graph:
 			+ "\n   OUT:    "+str(L[2]) \
 			+ "\n   COV:    "+str(L[3])+"\n"
 		return s
-
-	def printToFile(self,f):
-		f.write(str(self.k)+"\n")
-		f.write(str(self.ID)+"\n")
-		f.write(str(len(self))+"\n")
-		f.write("ID;CONTIG;IN;OUT;COV\n")
-		for ID, [c,IN,OUT,COV] in self.contigs.iteritems():	
-			f.write(str(ID)+";"+str(c)+";"+str(IN)+";"+str(OUT)+";"+str(COV)+"\n")
-
-	#Before:	The file is of the correct form
-	#				0 k
-	#				1 ID
-	#				2 numberOfContigs
-	#				3 ID;CONTIG;IN;OUT;COV
-	#				...data of the form ID;CONTIG;IN;OUT;COV
-	#After:
-	#	for all lines we set self.contigs[ID] as [CONTIG,IN,OUT,COV]
-	def createGraphFromFile(self,fileName):
-		print "createGraphFromFile(fileName="+str(fileName)+")"
-		f = open("Output/"+fileName, 'r')
-		k = int(f.readline())
-		ID = int(f.readline())
-		numberOfContigs = int(f.readline())
-		h = f.readline()
-		assert h=="ID;CONTIG;IN;OUT;COV\n"
-		assert isinstance(k, int)
-		assert isinstance(ID, int)
-		assert isinstance(numberOfContigs, int)
-		assert k==self.k
-		for i, line in enumerate(f):
-			#print line
-			[ID,CONTIG,IN,OUT,COV] = line.strip().split(";")
-			#print ID,CONTIG,IN,OUT,COV
-			ID = int(ID)
-			COV = int(COV)
-			IN = eval(IN)
-			OUT = eval(OUT)
-			assert isinstance(ID, int)
-			assert isinstance(CONTIG, str)
-			assert isinstance(IN, list)
-			assert isinstance(OUT, list)
-			assert isinstance(COV, int)
-			self.contigs[ID] = [CONTIG,IN,OUT,COV]
-		f.close()
-		self.addKmersFromAllContigs()
-		self.ID = ID+1
-		assert len(self)==numberOfContigs
-		if not self.isLegalDBG():
-			self.printContigs()
-			raise Exception("The graph we read from the file is not legal!")
-		print "Done creating the Graph from the file"
 
 	def printKmers(self,printText=-1):
 		if printText!=-1:
@@ -133,9 +92,131 @@ class Graph:
 			print "   COV:   ", L[3]
 		print "\n"
 
-	#create G_naive from the same contigs as G consists of
-	#We can use self.kmers to get all the kmers from the contigs
+	def printContigsWithRatings(self,theContigs=-1):
+		if theContigs==-1:
+			theContigs = self.contigs
+		for c_ID in theContigs:
+			[c,c_IN,c_OUT,c_COV] = theContigs[c_ID]
+			c_inD, c_outD, R = self.degrees[c_ID]
+			print "["+str(c_ID)+", "+c+", "+str(c_IN)+", "+str(c_OUT)+", "+str(c_COV)+"]",c_inD,c_outD,R,helpers.cLen(c,self.k)
+
+
+	#--------------------------------------------------------------------------
+	#--------------------functions for storing graphs in files-----------------
+	#--------------------------------------------------------------------------
+	def printToFile(self,fileName):
+		f = open(fileName, 'w')
+		f.write(str(self.k)+"\n")
+		f.write(str(self.ID)+"\n")
+		f.write(str(len(self))+"\n")
+		f.write("ID;CONTIG;IN;OUT;COV\n")
+		for ID, [c,IN,OUT,COV] in self.contigs.iteritems():	
+			f.write(str(ID)+";"+str(c)+";"+str(IN)+";"+str(OUT)+";"+str(COV)+"\n")
+		f.close()
+	
+	def createGraphFromFile(self,fileName):
+		#Before:	The file is of the correct form
+		#				0 k
+		#				1 ID
+		#				2 numberOfContigs
+		#				3 ID;CONTIG;IN;OUT;COV
+		#				...data of the form ID;CONTIG;IN;OUT;COV
+		#After:
+		#	for all lines we set self.contigs[ID] as [CONTIG,IN,OUT,COV]
+		#print "createGraphFromFile(fileName="+str(fileName)+")"
+		#Read header lines and assert everything is as expected:
+		assert(self.isEmpty()), "This function only works on an empty Graph"
+		f = open(fileName, 'r')
+		k = int(f.readline())
+		ID = int(f.readline())
+		numberOfContigs = int(f.readline())
+		h = f.readline()
+		assert h=="ID;CONTIG;IN;OUT;COV\n"
+		assert isinstance(k, int)
+		assert isinstance(ID, int)
+		assert isinstance(numberOfContigs, int)
+		assert k==self.k
+
+		#Read the contigs:
+		for line in f:
+			[ID,CONTIG,IN,OUT,COV] = line.strip().split(";")
+			ID = int(ID)
+			COV = int(COV)
+			IN = eval(IN)
+			OUT = eval(OUT)
+			assert isinstance(ID, int)
+			assert isinstance(CONTIG, str)
+			assert isinstance(IN, list)
+			assert isinstance(OUT, list)
+			assert isinstance(COV, int)
+			self.contigs[ID] = [CONTIG,IN,OUT,COV]
+		f.close()
+		self.addKmersFromAllContigs()
+		self.ID = ID+1
+		assert len(self)==numberOfContigs
+		if self.assertLegal:
+			if not self.isLegalDBG():
+				self.printContigs()
+				raise Exception("The graph we read from the file is not legal!")
+		#print "Done creating the Graph from the file "+fileName
+
+	def saveAs_GFA_toFile(self,fileName):
+		def edge(a_ID,S1,b_ID,S2):
+			return "L\t"+str(a_ID)+"\t"+S1+"\t"+str(b_ID)+"\t"+S2+"\t"+str(self.k-1)+"M\n"
+
+		f = open(fileName, 'w')
+
+		#Skrifa haus:
+		f.write("H\tVN:Z:1.0\n")
+
+		#Skrifa contigana:
+		for c_ID, [c,c_IN,c_OUT,c_COV] in self.contigs.iteritems():
+			f.write("S\t%d\t%s\t*\n"%(c_ID,c))
+
+		#Skrifa tengingarnar: (c->d)
+		#edgeDict = {}
+		edgeDict = collections.defaultdict(list)
+		#13->twin(139)
+		for c_ID, [c,c_IN,c_OUT,c_COV] in self.contigs.iteritems():
+			for (d_ID,d_B) in c_OUT:
+				if d_B:
+					#C->D og twin(C)->twin(D)
+					edgeDict[c_ID].append(edge(c_ID,"+",d_ID,"+"))
+					edgeDict[d_ID].append(edge(d_ID,"-",c_ID,"-"))
+				else:
+					#C->twin(D) og D->twin(C)
+					#Got to make sure we don't add the connection twice
+					e1 = edge(c_ID,"+",d_ID,"-")
+					e2 = edge(d_ID,"+",c_ID,"-")
+					if not e1 in edgeDict[c_ID]:
+						edgeDict[c_ID].append(e1)
+						edgeDict[d_ID].append(e2)
+			for (d_ID,d_B) in c_IN:
+				if d_B:
+					#D->C og twin(C)->twin(D)
+					pass	#this has already been added
+				else:
+					#twin(D)->C og twin(C)->D
+					e1 = edge(d_ID,"-",c_ID,"+")
+					e2 = edge(c_ID,"-",d_ID,"+")
+					if not e1 in edgeDict[c_ID]:
+						edgeDict[d_ID].append(e1)
+						edgeDict[c_ID].append(e2)
+
+		for key in sorted(edgeDict.iterkeys()):
+			for value in edgeDict[key]:
+				f.write(value)
+		
+		f.close()
+
+							#a->twin(b) kemur tvisvar
+
+
+	#--------------------------------------------------------------------------
+	#----------------functions for creating and comparing to G_naive-----------
+	#--------------------------------------------------------------------------
 	def createNaive(self):
+		#create G_naive from the same contigs as G consists of
 		if self.printFunctionNames:
 			print "createNaive(G)"
 		
@@ -156,14 +237,14 @@ class Graph:
 			G_naive.printContigs("G_naive")
 		return compareGraphs.isSameGraph(self,G_naive,False,self.printFunctionNames,self.printStatus,relaxAssertions=False)
 
+
 	#--------------------------------------------------------------------------
 	#-----------------Simple functions for working with graphs-----------------
 	#--------------------------------------------------------------------------
-
-	#Before:	ID is the ID of a contig c in the graph
-	#			IN_list is a list of tuples. E.g. [(0,True)]
-	#After:		the IN of c has been set as IN_list
 	def setIN(self,ID,IN_list):
+		#Before:	ID is the ID of a contig c in the graph
+		#			IN_list is a list of tuples. E.g. [(0,True)]
+		#After:		the IN of c has been set as IN_list
 		if self.printFunctionNames:
 			print "setIN(ID="+str(ID)+", IN_list="+str(IN_list)+")"
 		temp = self.contigs[ID]
@@ -175,16 +256,10 @@ class Graph:
 		temp = self.contigs[ID]
 		temp[2] = OUT_list
 
-	def increaseCOV_by(self,ID,x):
-		if self.printFunctionNames:
-			print "increaseCOV_by(ID="+str(ID)+", x="+str(x)+")"
-		temp = self.contigs[ID]
-		self.contigs[ID] = [temp[0],temp[1],temp[2],temp[3]+x]
-
-	#Before:	ID is the ID of a contig c in the graph
-	#			IN_tuple is a tuple. E.g. (0,True)
-	#After:		IN_tuple has been added to c's IN
 	def addIN(self,ID,IN_tuple):
+		#Before:	ID is the ID of a contig c in the graph
+		#			IN_tuple is a tuple. E.g. (0,True)
+		#After:		IN_tuple has been added to c's IN
 		if self.printFunctionNames:
 			print "(addIN(ID="+str(ID)+", IN_tuple="+str(IN_tuple)+")"
 		temp = self.contigs[ID]
@@ -196,45 +271,34 @@ class Graph:
 		temp = self.contigs[ID]
 		temp[2].append(OUT_tuple)
 
-	"""
-	#Before:	ID is the ID of a contig c in the graph
-	#			IN_tuple is a tuple. E.g. (0,True)
-	#After:		IN_tuple has been deleted from c's IN (if it is one of c's IN)
-	def deleteIN(self,ID,IN_tuple):
-		if self.printFunctionNames:
-			print "deleteIN(ID+"+str(ID)+", IN_tuple="+str(IN_tuple)+")"
-		[c,IN,OUT,COV] = self.contigs[ID]
-		for t in IN:
-			if t==IN_tuple:
-				IN.remove(IN_tuple)
-				break
-		self.contigs[ID] = [c,IN,OUT,COV]
-
-	def deleteOUT(self,ID,OUT_tuple):
-		if self.printFunctionNames:
-			print "deleteOUT(ID+"+str(ID)+", OUT_tuple="+str(OUT_tuple)+")"
-		[c,IN,OUT,COV] = self.contigs[ID]
-		for t in OUT:
-			if t==OUT_tuple:
-				OUT.remove(OUT_tuple)
-				break
-		self.contigs[ID] = [c,IN,OUT,COV]
-	"""
-
 	def ID_has_IN(self,ID,IN_tuple):
 		return IN_tuple in self.contigs[ID][1]
 
 	def ID_has_OUT(self,ID,IN_tuple):
 		return IN_tuple in self.contigs[ID][2]
 
+	def getOtherIN(self,c_ID,c_IN):
+		#Returns any IN connection except a connection from C->C
+		assert(len(c_IN)>0),"c_IN can't be empty"
+		for (x_ID,x_B) in c_IN:
+			if x_ID!=c_ID:
+				return (x_ID,x_B)
+		assert(False),"We should never get here"
+
+	def getOtherOUT(self,c_ID,c_OUT):
+		assert(len(c_OUT)>0),"c_OUT can't be empty"
+		for (x_ID,x_B) in c_OUT:
+			if x_ID!=c_ID:
+				return (x_ID,x_B)
+		assert(False),"We should never get here"
 
 	def addKmersFromAllContigs(self):
 		for ID, values in self.contigs.iteritems():
 			self.addKmersFromContig(ID,values[0])
 
-	#Before: 	c is a contig with ID ID
-	#After:		all kmers from c and their twins have been added to the kmerDict
 	def addKmersFromContig(self,ID,c="-1"):
+		#Before: 	c is a contig with ID ID
+		#After:		all kmers from c and their twins have been added to the kmerDict
 		if c=="-1":
 			c = self.contigs[ID][0]
 		for i, km in enumerate(dbg.kmers(c,self.k)):
@@ -242,9 +306,9 @@ class Graph:
 		for i, km in enumerate(dbg.kmers(dbg.twin(c),self.k)):
 			self.kmers[km]= [ID,i,False]
 
-	#Before: 	c is a contig with ID ID
-	#After:		all kmers from c and their twins have been deleted from self.kmers
 	def deleteKmersFromContig(self,ID,c="-1"):
+		#Before: 	c is a contig with ID ID
+		#After:		all kmers from c and their twins have been deleted from self.kmers
 		if c=="-1":
 			c = self.contigs[ID][0]
 		for km in dbg.kmers(c,self.k):
@@ -252,9 +316,9 @@ class Graph:
 				del self.kmers[km]
 				del self.kmers[dbg.twin(km)]
 
-	#returns the lowest available ID in the graph. Maintains self.ID as
-	#the lowest available ID
 	def getID(self):
+		#returns the lowest available ID in the graph. Maintains self.ID as
+		#the lowest available ID
 		ID = self.ID
 		self.ID += 1
 		return ID
@@ -262,19 +326,46 @@ class Graph:
 	def setID(self,newID):
 		self.ID = newID
 
-	#returns true if the graph is empty. False otherwise
 	def isEmpty(self):
+		#returns true if the graph is empty. False otherwise
 		return len(self.contigs)==0
 
 	def hasNoKmers(self):
 		return len(self.kmers)==0
 
+	def numKmerPairs(self):
+		return len(self.kmers)/2
+
+	def contigSum(self):
+		S = 0
+		for c_ID,[c,c_IN,c_OUT,c_COV] in self.contigs.iteritems():
+			S += helpers.cLen(c,self.k)
+		return S
 
 
+	#--------------------------------------------------------------------------
+	#-------------------Functions for working with coverage--------------------
+	#--------------------------------------------------------------------------
+	def getAverageKmerCoverageOfContig(self,cID):
+		#Before: cID is the ID of a contig C in the graph
+		#After:  Returns the average coverage of the k-mers in C
+		[c,IN,OUT,COV] = self.contigs[cID]
+		return COV / helpers.cLen(c,self.k)
+
+	def getCoverageOfKmer(self,km):
+		#Returns the estimated coverage of km
+		#by returning the average coverage of the
+		#contig km occurs in
+		[cID, i, B] = self.kmers[km]
+		return self.getAverageKmerCoverageOfContig(cID)
+
+
+	#--------------------------------------------------------------------------
+	#----------Functions for checking whether the graph is a legal DBG---------
+	#--------------------------------------------------------------------------
 	def isLegalDBG(self, skipKmers=False):
 		if self.printIsLegal:
 			print "isLegalDBG(skipKmers="+str(skipKmers)+")"
-
 		#We start by making sure that we have a legal Graph
 		#	-Make sure the dict of contigs has a list of 4 values for each contig
 		#	and all of them of the correct type
@@ -301,7 +392,6 @@ class Graph:
 			return False
 
 		return True
-
 
 	def isLegalGraph(self, skipKmers=False):
 		if self.printIsLegal:
@@ -388,7 +478,6 @@ class Graph:
 
 		return True
 
-
 	def isLegal_kmerDict(self):
 		if self.printIsLegal:
 			print "isLegal_kmerDict()"
@@ -458,7 +547,6 @@ class Graph:
 
 		return True
 
-
 	def isLegal_ID(self):
 		if self.printIsLegal:
 			print "isLegal_ID()"
@@ -476,7 +564,6 @@ class Graph:
 			return False
 		else:
 			return True
-
 
 	def isLegal_IN_and_OUT(self):
 		if self.printIsLegal:
@@ -545,12 +632,11 @@ class Graph:
 
 		return True
 
-
-	#Before:	self is a Graph object
-	#After:		if some contig contains a connection to itself
-	#			return False if it's not of the correct form. [(0,False),(0,False)] instead of
-	#			[(0,False)] for example
 	def isLegal_connectionsToSelf(self):
+		#Before:	self is a Graph object
+		#After:		if some contig contains a connection to itself
+		#			return False if it's not of the correct form. [(0,False),(0,False)] instead of
+		#			[(0,False)] for example
 		if self.printIsLegal:
 			print "isLegal_connectionsToSelf()"
 		#if self.printStatus:
@@ -611,7 +697,6 @@ class Graph:
 						return False
 		return True
 
-
 	def isLegal_merge(self):
 		if self.printIsLegal:
 			print "isLegal_merge()"
@@ -626,16 +711,18 @@ class Graph:
 		return True
 
 
-
-	#Before:	aID and bID are the IDs of contigs a and b
-	#			a and b are contigs already added to the graph
-	#			A and B are Booleans
-	#Note:		It is possible that aID=bID. I.e. we may be connecting a to itself
-	#After:		a and b have been connected together
-	#			A and B represent how we're connecting a and b:
-	#			| A=T, B=T |   A=T, B=F  |  A=F, B=T  |     A=F, B=F     |
-	#			|   a->b   |  a->twin(b) | twin(a)->b | twin(a)->twin(b) |
+	#--------------------------------------------------------------------------
+	#--------------More complex functions for working with graphs--------------
+	#--------------------------------------------------------------------------
 	def connect_a_to_b(self,aID,bID,A,B):
+		#Before:	aID and bID are the IDs of contigs a and b
+		#			a and b are contigs already added to the graph
+		#			A and B are Booleans
+		#Note:		It is possible that aID=bID. I.e. we may be connecting a to itself
+		#After:		a and b have been connected together
+		#			A and B represent how we're connecting a and b:
+		#			| A=T, B=T |   A=T, B=F  |  A=F, B=T  |     A=F, B=F     |
+		#			|   a->b   |  a->twin(b) | twin(a)->b | twin(a)->twin(b) |
 		if self.printFunctionNames:
 			print "connect_a_to_b(aID=" +str(aID)+ ", bID=" + str(bID) + ", A=" + str(A) + ", B=" + str(B)+")"
 		if A and B:
@@ -650,17 +737,9 @@ class Graph:
 		elif not A and not B:
 			self.contigs[bID][2].append((aID,True))
 			self.contigs[aID][1].append((bID,True))
-		#update COV:
-		#[a,a_IN,a_OUT,a_COV] = self.contigs[aID]
-		#[b,b_IN,b_OUT,b_COV] = self.contigs[bID]
-		#self.increaseCOV_by(aID, int(((self.k-1)/float(len(b)))*b_COV))
-		#self.increaseCOV_by(bID, int(((self.k-1)/float(len(a)))*a_COV))
 
-
-
-
-	#Function that connects a and b if and only if they are not already connected
 	def connect_a_to_b_ifNotAlreadyConnected(self,aID,bID,A,B):
+		#Function that connects a and b if and only if they are not already connected
 		if self.printFunctionNames:
 			print "connect_a_to_b_ifNotAlreadyConnected(aID=" +str(aID)+ ", bID=" + str(bID) + ", A=" + str(A) + ", B=" + str(B)+")"
 		if A and B:
@@ -676,97 +755,13 @@ class Graph:
 			if (not self.ID_has_OUT(bID,(aID,True))) and (not self.ID_has_IN(aID,(bID,True))):
 				self.connect_a_to_b(aID,bID,A,B)
 
-
-
-
-
-	#--------------------------------------------------------------------------
-	#--------------More complex functions for working with graphs--------------
-	#--------------------------------------------------------------------------
-
-	#--------------------changeID_FromTo and helper functions--------------------
-
-	#Before:	ID is the id of contig c in the legal DBG
-	#After:		contig c now has the id ID_new and all appropriate changes have been made
-	#				the INs/OUTs of c now connect to ID_new instead of ID
-	#				the graph is a legal DBG
-	def changeID_FromTo(self,ID,ID_new):
-		if self.printFunctionNames:
-			print "changeID_FromTo(ID="+str(ID)+", ID_new="+str(ID_new)+")"
-		if ID==ID_new:
-			return
-
-		assert ID_new >= self.ID, "ID_new must be a free ID. ID="+str(self.ID)+", ID_new="+str(ID_new)
-
-		#Find all occurrences of ID in the IN and OUT connections of c and change them into ID_new
-		self.changeID_ofConnections(ID,ID_new)
-
-		#initialize self.contigs[ID_new] with the same values as self.contigs[ID]:
-		#[c,IN,OUT,COV] = self.contigs[ID]
-		#self.contigs[ID_new] = [c,IN,OUT,COV]
-		temp = self.contigs[ID]
-		self.contigs[ID_new] = temp
-
-		#delete self.contigs[ID] from the graph
-		del self.contigs[ID]
-
-		#add the kmers from c again (now with ID_new)
-		self.addKmersFromContig(ID_new,temp[0])
-
-		self.setID(max(ID_new+1,self.ID))
-
-		#now self.contigs[ID_new] has all the same attributes as self.contigs[ID] had before we called the function and the graph is a legal DBG
-
-	def changeID_ofConnections(self,ID,ID_new):
-		if self.printFunctionNames:
-			print "changeID_ofConnections(ID="+str(ID)+", ID_new="+str(ID_new)+")"
-		#Create a list of all occurences of ID in the Graph (plus self.contigs[ID] which is not in this list by default)
-		conns = self.changeID_findConnections(ID)
-
-		#change all occurences of ID into ID_new:
-		self.changeID_changeConnections(ID,ID_new,conns,ID_old=-1)
-
-
-	def changeID_findConnections(self,ID):
-		if self.printFunctionNames:
-			print "changeID_findConnections(ID="+str(ID)+")"
-		temp = self.contigs[ID]
-		conns = []	#a list of the IDs of all the contigs that c connects to
-		for (i_ID,i_B) in temp[1]:
-			conns.append(i_ID)
-		for (i_ID,i_B) in temp[2]:
-			conns.append(i_ID)
-		return conns
-
-
-	def changeID_changeConnections(self,ID,ID_new,conns,ID_old=-1):
-		if self.printFunctionNames:
-			print "changeID_changeConnections(ID="+str(ID)+", ID_new="+str(ID_new)+", conns="+str(conns)+", ID_old="+str(ID_old)+")"
-		if ID_old==-1:
-			ID_old = ID
-		for i_ID in conns:
-			[i,i_IN,i_OUT,i_COV] = self.contigs[i_ID]
-			i_IN_new = list(i_IN)
-			for index, (x_ID,x_B) in enumerate(i_IN):
-				if x_ID==ID_old:
-					i_IN_new[index] = (ID_new,x_B)
-			self.setIN(i_ID,i_IN_new)
-
-			i_OUT_new = list(i_OUT)
-			for index, (x_ID,x_B) in enumerate(i_OUT):
-				if x_ID==ID_old:
-					i_OUT_new[index] = (ID_new,x_B)
-			self.setOUT(i_ID,i_OUT_new)
-
-	#--------------------changeID_FromTo functions finished--------------------
-
-	#Before:	The graph is a legal DBG and
-	#			self.contigs[ID] = [c,IN,OUT,Cov]
-	#After:		The graph is still a legal DBG and
-	#			self.contigs[ID] = [twin(c),IN*,OUT*,COV]
-	#			The INs/OUTs of c have been changed so that they connect
-	#			to c* instead of c where c* is c after flipping
 	def flipContig(self,c_ID):
+		#Before:	The graph is a legal DBG and
+		#			self.contigs[ID] = [c,IN,OUT,Cov]
+		#After:		The graph is still a legal DBG and
+		#			self.contigs[ID] = [twin(c),IN*,OUT*,COV]
+		#			The INs/OUTs of c have been changed so that they connect
+		#			to c* instead of c where c* is c after flipping
 		if self.printFunctionNames:
 			print "flipContig(c_ID="+str(c_ID)+")"
 		if self.assertLegal:
@@ -855,25 +850,98 @@ class Graph:
 		if self.assertLegal:
 			assert self.isLegalGraph()
 
+	def sortByContigLength(self):
+		for key in sorted(edgeDict.iterkeys()):
+			for value in edgeDict[key]:
+				f.write(value)
+
+	#--------------------------------------------------------------------------
+	#-------------------changeID_FromTo and helper functions-------------------
+	#--------------------------------------------------------------------------
+	def changeID_FromTo(self,ID,ID_new):
+		#Before:	ID is the id of contig c in the legal DBG
+		#After:		contig c now has the id ID_new and all appropriate changes have been made
+		#				the INs/OUTs of c now connect to ID_new instead of ID
+		#				the graph is a legal DBG
+		if self.printFunctionNames:
+			print "changeID_FromTo(ID="+str(ID)+", ID_new="+str(ID_new)+")"
+		if ID==ID_new:
+			return
+
+		assert ID_new >= self.ID, "ID_new must be a free ID. ID="+str(self.ID)+", ID_new="+str(ID_new)
+
+		#Find all occurrences of ID in the IN and OUT connections of c and change them into ID_new
+		self.changeID_ofConnections(ID,ID_new)
+
+		#initialize self.contigs[ID_new] with the same values as self.contigs[ID]:
+		#[c,IN,OUT,COV] = self.contigs[ID]
+		#self.contigs[ID_new] = [c,IN,OUT,COV]
+		temp = self.contigs[ID]
+		self.contigs[ID_new] = temp
+
+		#delete self.contigs[ID] from the graph
+		del self.contigs[ID]
+
+		#add the kmers from c again (now with ID_new)
+		self.addKmersFromContig(ID_new,temp[0])
+
+		self.setID(max(ID_new+1,self.ID))
+
+		#now self.contigs[ID_new] has all the same attributes as self.contigs[ID] had before we called the function and the graph is a legal DBG
+
+	def changeID_ofConnections(self,ID,ID_new):
+		if self.printFunctionNames:
+			print "changeID_ofConnections(ID="+str(ID)+", ID_new="+str(ID_new)+")"
+		#Create a list of all occurences of ID in the Graph (plus self.contigs[ID] which is not in this list by default)
+		conns = self.changeID_findConnections(ID)
+
+		#change all occurences of ID into ID_new:
+		self.changeID_changeConnections(ID,ID_new,conns,ID_old=-1)
+
+	def changeID_findConnections(self,ID):
+		if self.printFunctionNames:
+			print "changeID_findConnections(ID="+str(ID)+")"
+		temp = self.contigs[ID]
+		conns = []	#a list of the IDs of all the contigs that c connects to
+		for (i_ID,i_B) in temp[1]:
+			conns.append(i_ID)
+		for (i_ID,i_B) in temp[2]:
+			conns.append(i_ID)
+		return conns
+
+	def changeID_changeConnections(self,ID,ID_new,conns,ID_old=-1):
+		if self.printFunctionNames:
+			print "changeID_changeConnections(ID="+str(ID)+", ID_new="+str(ID_new)+", conns="+str(conns)+", ID_old="+str(ID_old)+")"
+		if ID_old==-1:
+			ID_old = ID
+		for i_ID in conns:
+			[i,i_IN,i_OUT,i_COV] = self.contigs[i_ID]
+			i_IN_new = list(i_IN)
+			for index, (x_ID,x_B) in enumerate(i_IN):
+				if x_ID==ID_old:
+					i_IN_new[index] = (ID_new,x_B)
+			self.setIN(i_ID,i_IN_new)
+
+			i_OUT_new = list(i_OUT)
+			for index, (x_ID,x_B) in enumerate(i_OUT):
+				if x_ID==ID_old:
+					i_OUT_new[index] = (ID_new,x_B)
+			self.setOUT(i_ID,i_OUT_new)
 
 
 	#--------------------------------------------------------------------------
 	#--------------------addSegmentToGraph and subfunctions--------------------
 	#--------------------------------------------------------------------------
-
-	#Before:	segment is a DNA string
-	#			this Graph is a legal DBG graph
-	#After:		segment has been added to the graph
-	#			the kmers from segment have been added to self.kmers
-	#			the graph is a legal DBG graph
 	def addSegmentToGraph(self,segment):
-		#print "addSegmentToGraph(segment="+str(segment)+")"
-		#self.printContigs("bla")
+		#Before:	segment is a DNA string
+		#			this Graph is a legal DBG graph
+		#After:		segment has been added to the graph
+		#			the kmers from segment have been added to self.kmers
+		#			the graph is a legal DBG graph
 		if self.printFunctionNames:
 			print "addSegmentToGraph(segment="+str(segment)+")"
 		if self.printStatus:
 			self.printContigs("inside addSegmentToGraph")
-			#self.printKmers("Kmers")
 		if self.assertLegal:
 			assert self.isLegalDBG()
 		if len(segment) < self.k:
@@ -891,6 +959,7 @@ class Graph:
 			else:
 				#We have seen this kmer before
 				if B1:
+					#Update the cov of the contig it occurs in by 1
 					[contigID, index, B] = self.kmers[km]
 					self.contigs[contigID][3] += 1
 				if i-start>=1:
@@ -901,24 +970,20 @@ class Graph:
 		if self.assertLegal:
 			assert self.isLegalDBG()
 
-
-
-	#Helper function for addSegmentToGraph
-	#Before:	segment is a DNA string
-	#			this Graph is a legal DBG graph
-	#			The kmers from segment (or its twin) are neither already in
-	#			the graph or in a different place in segment
-	#			No kmer from segment is in self.kmers
-	#			Note:
-	#				the fw/bw of some kmer in segment may be in the graph
-	#				the fw/bw of some kmer in segment may be another kmer in segment
-	#					(i.e. segment might connect to itself)
-	#After:		Same as addSegmentToGraph
-	#			(addSegmentToGraph(S) finds which parts of S we haven't seen before and
-	#			calls addSegmentWithNoSeenKmers to actually add those parts)
 	def addSegmentWithNoSeenKmers(self,segment):
-		#print "addSegmentWithNoSeenKmers(segment="+str(segment)+")"
-		#self.printContigs("blee")
+		#Helper function for addSegmentToGraph
+		#Before:	segment is a DNA string
+		#			this Graph is a legal DBG graph
+		#			The kmers from segment (or its twin) are neither already in
+		#			the graph or in a different place in segment
+		#			No kmer from segment is in self.kmers
+		#			Note:
+		#				the fw/bw of some kmer in segment may be in the graph
+		#				the fw/bw of some kmer in segment may be another kmer in segment
+		#					(i.e. segment might connect to itself)
+		#After:		Same as addSegmentToGraph
+		#			(addSegmentToGraph(S) finds which parts of S we haven't seen before and
+		#			calls addSegmentWithNoSeenKmers to actually add those parts)
 		if self.printFunctionNames:
 			print "addSegmentWithNoSeenKmers(segment="+str(segment)+")"
 		if self.printStatus:
@@ -943,12 +1008,12 @@ class Graph:
 						if y==km:
 							#km connects to itself
 							if i==0:
-								s0, s1 = splitString(segment,self.k,self.k)
+								s0, s1 = helpers.splitString(segment,self.k,self.k)
 								self.addSegmentAlreadySplit(s0)
 								self.addSegmentWithNoSeenKmers(s1)
 								return
 							else:
-								s0, s1 = splitString(segment,i+self.k-1,self.k)
+								s0, s1 = helpers.splitString(segment,i+self.k-1,self.k)
 								self.addSegmentWithNoSeenKmers(s0)	#Má ég segja addSegmentAlreadySplitOnSelf(s0) hér?
 								self.addSegmentWithNoSeenKmers(s1)
 								return
@@ -958,7 +1023,7 @@ class Graph:
 								pass
 								#raise Exception("We should have done this split as a bw of a previous kmer earlier in the code")
 							elif not (y==segment[i+1:i+1+self.k]):	#viljum ekki splitta ef y er næsti kmer í segment
-								s0, s1 = splitString(segment,i+self.k,self.k)
+								s0, s1 = helpers.splitString(segment,i+self.k,self.k)
 								self.addSegmentWithNoSeenKmers(s0)
 								self.addSegmentWithNoSeenKmers(s1)
 								return
@@ -969,12 +1034,12 @@ class Graph:
 						if y==dbg.twin(km):
 							#km connects to the twin of itself
 							if i==0:
-								s0, s1 = splitString(segment,self.k,self.k)
+								s0, s1 = helpers.splitString(segment,self.k,self.k)
 								self.addSegmentAlreadySplit(s0)
 								self.addSegmentWithNoSeenKmers(s1)
 								return
 							elif i<L-self.k:			#i=L-self.k er indexid a sidasta kmernum
-								s0, s1 = splitString(segment,i+self.k,self.k)
+								s0, s1 = helpers.splitString(segment,i+self.k,self.k)
 								self.addSegmentWithNoSeenKmers(s0)
 								self.addSegmentWithNoSeenKmers(s1)
 								return
@@ -985,7 +1050,7 @@ class Graph:
 							if i==L-self.k:
 								raise Exception("km->twinSegment. This can't happen. We should have split earlier. km="+str(km)+", y="+str(y))
 							else:
-								s0, s1 = splitString(segment,i+self.k,self.k)
+								s0, s1 = helpers.splitString(segment,i+self.k,self.k)
 								self.addSegmentWithNoSeenKmers(s0)
 								self.addSegmentWithNoSeenKmers(s1)
 								return
@@ -1003,7 +1068,7 @@ class Graph:
 								pass		#don't need to split
 							elif not (y==segment[i-1:i-1+self.k]):
 								if i<L-self.k:
-									s0, s1 = splitString(segment,i+self.k-1,self.k)
+									s0, s1 = helpers.splitString(segment,i+self.k-1,self.k)
 									self.addSegmentWithNoSeenKmers(s0)
 									self.addSegmentWithNoSeenKmers(s1)
 									return
@@ -1018,7 +1083,7 @@ class Graph:
 							if i==0:
 								pass
 							else:
-								s0, s1 = splitString(segment,i+self.k-1,self.k)
+								s0, s1 = helpers.splitString(segment,i+self.k-1,self.k)
 								self.addSegmentWithNoSeenKmers(s0)
 								self.addSegmentWithNoSeenKmers(s1)
 								return
@@ -1029,7 +1094,7 @@ class Graph:
 									print "twin(another km) connects to the first km in segment. We'll make bw of that later kmer do the split"
 								pass		#bw of a later km will catch this (then we'll need to split)
 							else:
-								s0, s1 = splitString(segment,i+self.k-1,self.k)
+								s0, s1 = helpers.splitString(segment,i+self.k-1,self.k)
 								self.addSegmentWithNoSeenKmers(s0)
 								self.addSegmentWithNoSeenKmers(s1)
 								return
@@ -1042,16 +1107,14 @@ class Graph:
 		if self.assertLegal:
 			assert self.isLegalDBG()
 
-
-	#Before:	segment does not need to be split further because of connections to itself
-	#			We might need to split segment further due to connections to other segments
-	#			in the graph
 	def addSegmentAlreadySplitOnSelf(self,segment):
+		#Before:	segment does not need to be split further because of connections to itself
+		#			We might need to split segment further due to connections to other segments
+		#			in the graph
 		if self.printFunctionNames:
 			print "addSegmentAlreadySplitOnSelf(segment="+str(segment)+")"
 		if self.printStatus:
 			self.printContigs("inside addSegmentAlreadySplitOnSelf")
-			#self.printKmers("Kmers")
 		if self.assertLegal:
 			assert self.isLegalDBG()
 		L = len(segment)
@@ -1070,8 +1133,7 @@ class Graph:
 					if (y in self.kmers) and (not i==L-self.k):	#we split at i+k unless km is the last kmer in segment, then we skip
 						if self.printStatus:
 							print "fw, y in kmers. y =", y
-						#return i+self.k
-						s0, s1 = splitString(segment,i+self.k,self.k)
+						s0, s1 = helpers.splitString(segment,i+self.k,self.k)
 						self.addSegmentAlreadySplitOnSelf(s0)
 						self.addSegmentAlreadySplitOnSelf(s1)
 						return
@@ -1080,8 +1142,7 @@ class Graph:
 					if (y in self.kmers) and (not i==0): #We split at i+k-1 unless km is the first km in segment, then we skip
 						if self.printStatus:
 							print "bw, y in kmers. y =", y
-						#return i+self.k-1
-						s0, s1 = splitString(segment,i+self.k-1,self.k)
+						s0, s1 = helpers.splitString(segment,i+self.k-1,self.k)
 						self.addSegmentAlreadySplitOnSelf(s0)
 						self.addSegmentAlreadySplitOnSelf(s1)
 						return
@@ -1094,27 +1155,25 @@ class Graph:
 		if self.assertLegal:
 			assert self.isLegalDBG()
 
-
-	#helper function for addSegmentWithNoSeenKmers
-	#Before:	segment is a DNA string
-	#			The graph is a legal DBG graph
-	#			the kmers in segment have not been seen before, neither in previous
-	#			contigs or segment itself
-	#			Segment does not need to be split up further
-	#				(did that in addSegmentWithNoSeenKmers)
-	#				We may have to split up contigs which the ends of segment can connect to
-	#After:
-	#			Segment has been added to the graph
-	#			the kmers from segment have been added to self.kmers
-	#			All contigs in this graph (including segment) have been split up as much as is needed
-	#			Note:
-	#				The graph is NOT necessary a legal DBG Graph (we might need to merge segment with it's connections)
 	def addSegmentAlreadySplit(self,segment):
+		#helper function for addSegmentWithNoSeenKmers
+		#Before:	segment is a DNA string
+		#			The graph is a legal DBG graph
+		#			the kmers in segment have not been seen before, neither in previous
+		#			contigs or segment itself
+		#			Segment does not need to be split up further
+		#				(did that in addSegmentWithNoSeenKmers)
+		#				We may have to split up contigs which the ends of segment can connect to
+		#After:
+		#			Segment has been added to the graph
+		#			the kmers from segment have been added to self.kmers
+		#			All contigs in this graph (including segment) have been split up as much as is needed
+		#			Note:
+		#				The graph is NOT necessary a legal DBG Graph (we might need to merge segment with it's connections)
 		if self.printFunctionNames:
 			print "addSegmentAlreadySplit(segment="+str(segment)+")"
 		if self.printStatus:
 			self.printContigs("inside addSegmentAlreadySplit")
-			#self.printKmers("Kmers")
 		if self.assertLegal:
 			assert self.isLegalDBG()
 		if len(segment) < self.k:
@@ -1124,9 +1183,9 @@ class Graph:
 
 		self.splitOthers(segment)
 
-		#give segment an ID and add it to self.contigs
+		#give segment an ID and add it to self.contigs with COV=2*(the number of k-mers in c)
 		ID = self.getID()
-		self.contigs[ID] = [segment,[],[],len(segment)-self.k+1]
+		self.contigs[ID] = [segment,[],[],2*helpers.cLen(segment,self.k)]
 
 		#add the kmers from segment to self.kmers
 		self.addKmersFromContig(ID,segment)
@@ -1150,22 +1209,21 @@ class Graph:
 		if self.assertLegal:
 			assert self.isLegalDBG()
 
-	#Helper function for addSegmentAlreadySplit
-	#Before:	segment has NOT been added to the graph (or connected to any contigs)
-	#			We will not have to split segment further in order to add it to the graph
-	#			NO kmer from segment is already in self.kmers
-	#			some kmers in the fw/bw of segment might already be in some contigs already
-	#			in the graph (in those cases we have to split the previous contigs)
-	#After:		segment is unchanged (no recursive calls)
-	#			We have split all other contigs in the graph wherever segment can connect to a kmer in them.
-	#				Note: We don't split contigs where segment can connect to their first/last kmers
-	#			i.e. NO more contigs need to be split in order to add segment to the graph
 	def splitOthers(self,segment,relaxAssertions=False):
+		#Helper function for addSegmentAlreadySplit
+		#Before:	segment has NOT been added to the graph (or connected to any contigs)
+		#			We will not have to split segment further in order to add it to the graph
+		#			NO kmer from segment is already in self.kmers
+		#			some kmers in the fw/bw of segment might already be in some contigs already
+		#			in the graph (in those cases we have to split the previous contigs)
+		#After:		segment is unchanged (no recursive calls)
+		#			We have split all other contigs in the graph wherever segment can connect to a kmer in them.
+		#				Note: We don't split contigs where segment can connect to their first/last kmers
+		#			i.e. NO more contigs need to be split in order to add segment to the graph
 		if self.printFunctionNames:
 			print "splitOthers(segment="+str(segment)+", relaxAssertions="+str(relaxAssertions)+")"
 		if self.printStatus:
 			self.printContigs("inside splitOthers")
-			#self.printKmers("kmers")
 		if self.assertLegal and not relaxAssertions:
 			assert self.isLegalDBG()
 		elif self.assertLegal and relaxAssertions:
@@ -1193,7 +1251,6 @@ class Graph:
 
 				if c_B:
 					splitIndex = c_i + self.k - 1
-					#splitIndex = c_i + self.k
 				else:
 					c_i = c_L - self.k - c_i 	#let c_i be the index of y in c instead of in twin(c)
 					splitIndex = c_i + self.k
@@ -1233,7 +1290,6 @@ class Graph:
 					continue	#Don't need to split because c_i is the location of the last kmer in c (or twin(c)).
 
 				if c_B:
-					#splitIndex = c_i + self.k - 1
 					splitIndex = c_i + self.k
 				else:
 					if self.printStatus:
@@ -1261,28 +1317,28 @@ class Graph:
 		#Note: There are technically 4 more cases but since a->b = twin(b)->twin(a) etc
 		#they are already covered
 
-	#helper function for splitOthers
-	#Before: 	ID is the ID of contig c
-	#			i is an integer
-	#			IF c has a connection to itself it is from end to end
-	#			(because we started with a legal DBG and c was part of it. Otherwise c would have been split up earlier)
-	#			SHOULD I MAKE IT NECESSARY THAT self.k <= i < L (so c0 and c1 both have at least 1 kmer)?!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	#After:
-	#	c has been deleted from the graph
-	#		c has been deleted from self.contigs
-	#		The kmers of c have been deleted from self.kmers
-	#	c0 and c1 have been added to the graph
-	#		and their kmers added to self.kmers
-	#	c0 has been split up into
-	#	   0	 i               L
-	#	c0[0:i-1]  ->  s[i-k:L-1]
-	#	  c0           c1
-	#	where
-	#		c0.IN = c.IN (and the contigs in c.IN get c0 as OUT instead of c)
-	#		c0.OUT = c1
-	#		c1.IN = c0
-	#		c1.OUT = c.OUT (and the contigs in c.OUT get c1 as IN instead of c)
 	def splitContig(self,ID,i,relaxAssertions=False):
+		#helper function for splitOthers
+		#Before: 	ID is the ID of contig c
+		#			i is an integer
+		#			IF c has a connection to itself it is from end to end
+		#			(because we started with a legal DBG and c was part of it. Otherwise c would have been split up earlier)
+		#			SHOULD I MAKE IT NECESSARY THAT self.k <= i < L (so c0 and c1 both have at least 1 kmer)?!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		#After:
+		#	c has been deleted from the graph
+		#		c has been deleted from self.contigs
+		#		The kmers of c have been deleted from self.kmers
+		#	c0 and c1 have been added to the graph
+		#		and their kmers added to self.kmers
+		#	c0 has been split up into
+		#	   0	 i               L
+		#	c0[0:i-1]  ->  s[i-k:L-1]
+		#	  c0           c1
+		#	where
+		#		c0.IN = c.IN (and the contigs in c.IN get c0 as OUT instead of c)
+		#		c0.OUT = c1
+		#		c1.IN = c0
+		#		c1.OUT = c.OUT (and the contigs in c.OUT get c1 as IN instead of c)
 		#Need to test this for special cases. Might need to handle connections from c->c in
 		#a different way
 		if self.printFunctionNames:
@@ -1296,7 +1352,7 @@ class Graph:
 				assert self.isLegalDBG()
 		[c,IN,OUT,COV] = self.contigs[ID]
 
-		c0, c1 = splitString(c,i,self.k)
+		c0, c1 = helpers.splitString(c,i,self.k)
 		if self.printStatus:
 			print c0,c1
 			print dbg.twin(c0),dbg.twin(c1)
@@ -1310,12 +1366,22 @@ class Graph:
 		#Create c0 and c1 and add correct connections
 		ID0 = self.getID()
 		ID1 = self.getID()
-		self.contigs[ID0] = [c0, IN, [(ID1,True)], COV/2]
-		self.contigs[ID1] = [c1, [(ID0,True)], OUT, COV/2]
+		l0 = helpers.cLen(c0,self.k)
+		l1 = helpers.cLen(c1,self.k)
+		if COV<=0:
+			raise Exception("COV must be greater than zero")
+		#if COV==1 or COV==2:
+		#	COV0 = 1
+		#	COV1 = 1
+		else:
+			COV0 = int(ceil(COV * ( float(l0) / (l0+l1) )))
+			COV1 = COV - COV0
+		assert(COV0+COV1==COV), "The total COV must be the same before and after the split"
+		assert(COV0>0 and COV1>0), "COV must be greater than zero"
+		self.contigs[ID0] = [c0, IN, [(ID1,True)], COV0]
+		self.contigs[ID1] = [c1, [(ID0,True)], OUT, COV1]
 		self.addKmersFromContig(ID0,c0)
 		self.addKmersFromContig(ID1,c1)
-
-
 
 		#If c had a connection from c->twin(c) i.e. c.OUT=[...(ID,False),(ID,False)...]
 		#we change:
@@ -1332,17 +1398,9 @@ class Graph:
 			elif y==(ID,True):
 				IN[i] = (ID1,True)
 
-		#OUT[:] = [y if y != (ID,False) else (ID1,False) for y in OUT]
-		#now do the same for twin(c)->c
-		#IN[:] = [y if y != (ID,False) else (ID0,False) for y in IN]
-		#now do the same for c->c:
-		#IN[:] = [y if y != (ID,True) else (ID1,True) for y in IN]
-		#OUT[:] = [y if y != (ID,True) else (ID0,True) for y in OUT]
-
 		if self.printStatus:
 			print ID,ID0,ID1
 			self.printContigs("After creating c0 and c1. Before changing neighbour connections")
-
 
 		#Now everything that's left is to update the connections to c0 and
 		#from c1 so that they indeed connect to c0/c1 instead of c
@@ -1380,23 +1438,20 @@ class Graph:
 		if self.assertLegal:
 			assert self.isLegalGraph()
 
-
-	#Helper function for addSegmentAldreadySplit
-	#Before:	ID is the ID of segment
-	#			self.contigs[ID] = [segment,[],[],0]
-	#			The kmers from segment have been added to self.kmers
-	#			The graph is a legal DBG except for one thing:
-	#				segment has not been connected to the other contigs
-	#				(after this function finishes we need to run mergeSegment
-	#				to make sure this is a legal DBG)
-	#			Note: No contig needs to be split up further in order to make the
-	#				  graph a legal dBG
-	#After:		segment has been connected to the other contigs in the graph using
-	#			self.connect_a_to_b(aID,bID,A,B)
-	#			i.e. self.contigs[ID] = [segment,IN,OUT,0]
 	def connectSegment(self,ID,segment=""):
-		#connect(Segment)
-		#	ID=46, segment = CGAATC
+		#Helper function for addSegmentAldreadySplit
+		#Before:	ID is the ID of segment
+		#			self.contigs[ID] = [segment,[],[],0]
+		#			The kmers from segment have been added to self.kmers
+		#			The graph is a legal DBG except for one thing:
+		#				segment has not been connected to the other contigs
+		#				(after this function finishes we need to run mergeSegment
+		#				to make sure this is a legal DBG)
+		#			Note: No contig needs to be split up further in order to make the
+		#				  graph a legal dBG
+		#After:		segment has been connected to the other contigs in the graph using
+		#			self.connect_a_to_b(aID,bID,A,B)
+		#			i.e. self.contigs[ID] = [segment,IN,OUT,0]
 		if segment == "":
 			[segment,IN,OUT,COV] = self.contigs[ID]
 		if self.printFunctionNames:
@@ -1405,16 +1460,10 @@ class Graph:
 			self.printContigs("inside connectSegment")
 		if self.assertLegal:
 			assert self.isLegalGraph()
-		#self.printKmers("Kmers")
-		#We need 4 for loops for this function.
-		#fw(last)
-		#bw(first)
-		#and fw/bw of the twins of last and first
 
 		#Add connections of the form:
 		#	segment->N
 		#	segment->twin(N)
-
 		L = len(segment)
 		for y in dbg.fw(segment[L-self.k:]):
 			if y in self.kmers:
@@ -1457,21 +1506,20 @@ class Graph:
 		if self.assertLegal:
 			assert self.isLegalGraph()
 
-
-	#Helper function for addSegmentAldreadySplit
-	#Before:	ID is the ID of segment
-	#			The graph is a legal DBG except we might need to merge segment
-	#			with it's connections
-	#After:		segment has been merged with it's neighbours wherever possible.
-	#			The graph is a legal DBG
-	#			Note: We need to make sure that the INs and OUTs of new_c have
-	#			new_ID instead of ID/N_ID in their INs / OUTs
-	#Note:
-	#	It is possible we can merge with an IN connection as well
-		#if we flipped the contig when merge-ing it will become an
-		#OUT connection. Therefore we don't want to throw an exception
-		#in this case (the error discovered 22.03.2017)
 	def mergeSegment(self, ID):
+		#Helper function for addSegmentAldreadySplit
+		#Before:	ID is the ID of segment
+		#			The graph is a legal DBG except we might need to merge segment
+		#			with it's connections
+		#After:		segment has been merged with it's neighbours wherever possible.
+		#			The graph is a legal DBG
+		#			Note: We need to make sure that the INs and OUTs of new_c have
+		#			new_ID instead of ID/N_ID in their INs / OUTs
+		#Note:
+		#	It is possible we can merge with an IN connection as well
+		#	if we flipped the contig when merge-ing it will become an
+		#	OUT connection. Therefore we don't want to throw an exception
+		#	in this case (the error discovered 22.03.2017)
 		assert ID in self.contigs, "ID must be the ID of a contig in the graph"
 		if self.printFunctionNames:
 			print "mergeSegment(ID="+str(ID)+")"
@@ -1521,8 +1569,6 @@ class Graph:
 				self.printContigs("Not a legal DBG")
 				print "The ID of the contig failing to merge:",ID
 				raise Exception("The graph is supposed to be a legal DBG")
-
-
 
 	def canMergeOUT(self,ID):
 		assert ID in self.contigs, "ID must be the ID of a contig in the graph"
@@ -1575,7 +1621,6 @@ class Graph:
 
 		return [False,None,None,None,None]
 
-
 	def canMergeIN(self, ID):
 		assert ID in self.contigs, "ID must be the ID of a contig in the graph"
 		if self.printFunctionNames:
@@ -1626,12 +1671,12 @@ class Graph:
 
 		return [False,None,None,None,None]
 
-
-	#A=True, B=True:   a->b
-	#A=True, B=False:  a->twin(b)
-	#A=False, B=True:  twin(a)->b
-	#A=False, B=False: twin(a)->twin(b) = b->a
 	def merge(self,a_ID,b_ID,A,B,flipped=False):
+		#Helper function for mergeSegment
+		#A=True, B=True:   a->b
+		#A=True, B=False:  a->twin(b)
+		#A=False, B=True:  twin(a)->b
+		#A=False, B=False: twin(a)->twin(b) = b->a
 		if self.printFunctionNames:
 			print "merge(a_ID="+str(a_ID)+", b_ID="+str(b_ID)+", A="+str(A)+", B="+str(B)+")"
 		assert a_ID in self.contigs, "a_ID must be the ID of a contig in the graph"
@@ -1641,7 +1686,6 @@ class Graph:
 		if A and B:
 			#merging a->b into new_c (by deleting b, adding it to a and updating a and it's connections)
 			#self.changeID_OUTs(b_ID,a_ID,conns)		#make the OUTs of b instead connect to a
-		#def changeID_ofConnections(self,ID):
 			self.changeID_ofConnections(b_ID,a_ID)
 			[a, a_IN, a_OUT, a_COV] = self.contigs[a_ID]
 			[b, b_IN, b_OUT, b_COV] = self.contigs[b_ID]
@@ -1662,143 +1706,632 @@ class Graph:
 		elif (not A) and (not B):
 			return self.merge(b_ID,a_ID,True,True)
 
+	
+	#--------------------------------------------------------------------------
+	#----------functions for checking for isolated, tips and bubbles-----------
+	#--------------------------------------------------------------------------
+	#---------------------------------
+	#markAllIsolated and it's helpers:
+	#---------------------------------
+	def createAllPathsInContigsCollection(self, MPL, c_ID, skipNodes=set()):
+		assert(isinstance(skipNodes,set)), "skipNodes must be a set"
+		#Create all paths with length < MPL which include C
+		allPathsIncludingC = self.createAllPathsIncludingContig(MPL, c_ID, skipNodes)
+		if allPathsIncludingC.isEmpty():	
+			return Path.PathList()
 
-"""
-	#This is not used anywhere anymore. Could be useful later though
-	#-----Helper function for splitContig-----
-	#Before:	ID is the ID of a contig c
-	#			The graph is NOT necessary a legal DBG
-	#After:
-	#		c has been removed from the graph
-	#		c has been removed from self.contigs
-	#		c's kmers have been removed from self.kmers
-	#		the connection to c has been removed from the IN's and OUT's of c
-	#Note:
-	#	It is NOT guaranteed that the graph is a legal DBG
-	def deleteContig(self,ID):
-		if self.printFunctionNames:
-			print "deleteContig(ID="+str(ID)+")"
-		if self.printStatus:
-			self.printContigs("inside deleteContig")
-		#self.printKmers("Kmers")
-		assert ID in self.contigs
-		#Get notað setOUT og setIN á samtals 4 stöðum hér til að einfalda kóðann!!!!!!!!!!!!!!!!!!!!!!!1
-		[c, IN, OUT, coverage] = self.contigs[ID]
-		if self.printStatus:
-			print c,IN,OUT,coverage
+		#Take a copy of allPathsIncludingC
+		allPaths = Path.PathList()		#This will store every path in C's collection of contigs
 
-		#for every contig x connecting to c
-		#	delete c from x's list of connections
-		for [xID,xB] in IN:
-			if self.printStatus:
-				print xID,xB
-			#x is a contig connecting to c
-			[x, xIN, xOUT, xCov] = self.contigs[xID]
-			#print x, xIN, xOUT, xCov
-			if xB:
-				#x->c so we remove ((ID,True)) from x.OUT
-				xOUT.remove((ID,True))
-				temp = self.contigs[xID]
-				self.contigs[xID] = [temp[0],temp[1],xOUT,temp[3]]
+		#Now we know that all the paths C is a part of (stored in allPathsIncludingC) each have a length shorter than MPL.
+		#Below we make sure that none of the contigs in any of the paths is part of another path which has length >= MPL
+		#We add all the paths to allPaths
+		for p in allPathsIncludingC.getPaths():
+			for (x_ID,x_B) in p.contigs:
+				xPaths = self.createAllPathsIncludingContig(MPL, x_ID, skipNodes)
+				if xPaths.isEmpty():
+					#X is part of a path with length >= MPL
+					return Path.PathList()
+				else:
+					for p in xPaths.getPaths():
+						if not p in allPaths:
+							allPaths.append(p)
+		return allPaths
+
+	def createAllPathsIncludingContig(self, MPL, c_ID, skipNodes=set(),ignoringLengthOfLast=False):
+		#Returns an empty PathList if any of the paths has a total lengh > MPL
+		#print "createAllPathsIncludingContig(MPL="+str(MPL)+", c_ID="+str(c_ID)+", skipNodes="+str(skipNodes)+", ignoringLengthOfLast="+str(ignoringLengthOfLast)+")"
+		assert(isinstance(skipNodes,set)), "skipNodes must be a set"
+		[c, c_IN, c_OUT, c_COV] = self.contigs[c_ID]
+		withinMaxLength = helpers.cLen(c,self.k) < MPL
+		if not withinMaxLength:
+			return Path.PathList()
+		visited = {c_ID}		#a set storing all contigs we have visited
+		temp = Path.Path()
+		temp.append(c_ID,True,c,self.k)
+		pathsInProgress = Path.PathList([temp])
+		allPaths = Path.PathList()
+
+		#Create all possible paths which include C
+		while not pathsInProgress.isEmpty() and withinMaxLength:
+			nodeHasChildAncestorNeither = 2		#0 means child, 1 ancestor, 2 neither
+			p = pathsInProgress.pop()
+			
+			#Get all child nodes of the last contig in the path
+			(e_ID,e_B) = p.getLastContigTuple()
+			DCorA = self.getDirectChildren(e_ID,e_B)
+			DCorA = helpers.DCorA_toAdd(DCorA,visited,skipNodes)
+			if DCorA:
+				nodeHasChildAncestorNeither = 0
 			else:
-				#twin(x)->c so we remove ((ID,False)) from x.IN
-				xIN.remove((ID,False))
-				temp = self.contigs[xID]
-				self.contigs[xID] = [temp[0],xIN,temp[2],temp[3]]
+				#If there were no child nodes we instead get all ancestor nodes of the first contig in the path
+				(e_ID,e_B) = p.getFirstContigTuple()
+				DCorA = self.getDirectAncestors(e_ID,e_B)
+				DCorA = helpers.DCorA_toAdd(DCorA,visited,skipNodes)
+				if DCorA:
+					nodeHasChildAncestorNeither = 1
+			#print DCorA
 
-		#for every contig x c connects to
-		#	delete c from x's list of connections
-		for [xID,xB] in OUT:
-			#x is a contig c connects to
-			[x, xIN, xOUT, xCov] = self.contigs[xID]
-			if xB:
-				xIN.remove((ID,True))
-				temp = self.contigs[xID]
-				self.contigs[xID] = [temp[0],xIN,temp[2],temp[3]]
+			#Remove nodes which had already been marked
+			newDCorA = []
+			for (x_ID,x_B) in DCorA:
+				if (self.degrees[x_ID][2] not in [1,2,-3]):
+					newDCorA.append((x_ID,x_B))
+			DCorA = newDCorA
+
+			#If there were no ancestor nodes then the path we just popped from pathsInProgress neither had an ancestor nor a child.
+			#We therefore add it to allPaths
+			if not DCorA:
+				allPaths.append(p)
 			else:
-				xOUT.remove((ID,False))
-				temp = self.contigs[xID]
-				self.contigs[xID] = [temp[0],temp[1],xOUT,temp[3]]
+				for (x_ID,x_B) in DCorA:
+					assert(not x_ID in skipNodes), "made sure of this above"
+					assert(not x_ID in visited), "made sure of this above"
+					visited.add(x_ID)
+					assert(self.degrees[x_ID][2] not in [1,2,-3]), "We had already removed nodes which had already been marked"
+					[x, x_IN, x_OUT, x_COV] = self.contigs[x_ID]
+					if nodeHasChildAncestorNeither==0:	#child
+						p.append(x_ID,x_B,x,self.k)
+					elif nodeHasChildAncestorNeither==1:	#ancestor
+						p.prepend(x_ID,x_B,x,self.k)
+					if ignoringLengthOfLast:
+						lenP = p.lengthOfAllButLast()
+					else:
+						lenP = len(p)
+					if lenP<MPL:
+						pathsInProgress.append(p)
+					else:
+						withinMaxLength = False
+						allPaths.append(p)
+						return Path.PathList()
+		return allPaths
 
-		#delete all kmers of c from self.kmers
-		self.deleteKmersFromContig(ID,c)
+	def isPartOfIsolated(self, MPL, c_ID, skipNodes=set()):
+		assert(isinstance(skipNodes,set)), "skipNodes must be a set"
+		#Create all paths with length < MPL in C's collection of contigs
+		allPaths = self.createAllPathsInContigsCollection(MPL, c_ID, skipNodes)
+		if allPaths.isEmpty():	
+			return False
+		else:
+			return True
 
-		#delete c (and therefore we don't need to worry about deleting every individual IN/OUT of c)
-		del self.contigs[ID]
-"""
+	def markAllIsolated(self, MPL):
+		for c_ID in self.contigs:
+			if not (self.degrees[c_ID][2] in [-3,1]):	#no need to mark the same collection twice
+				#Create all paths with length < MPL in C's collection of contigs
+				allPaths = self.createAllPathsInContigsCollection(MPL, c_ID, skipNodes=set())
+				if allPaths.isEmpty():	
+					isIso = False
+				else:
+					isIso = True
+				if isIso:
+					theContigs = allPaths.getContigIDs()
+					self.markAllContigsInSetWithNew_R(theContigs,new_R=1)
+				else:
+					theContigs = self.findAllConnectedContigs(c_ID)
+					self.markAllContigsInSetWithNew_R(theContigs,new_R=-3)
 
+		#self.printContigsWithRatings()
+		#Now we have marked all contigs which are not part of an isolated collection of contigs with a -3
+		#The rest is marked with a -1. Those are all isolated
+		#Therefore we change -1 into 1
+		#         and change -3 into -1
+		for c_ID in self.contigs:
+			R = self.degrees[c_ID][2]
+			assert(R in [1,-3]), "We have marked all non isolated with -3 and the rest should be marked with a -1. R="+str(R)
+		#for c_ID in self.contigs:
+		#	R = self.degrees[c_ID][2]
+		#	if R==-1:
+		#		self.degrees[c_ID][2] = 1
+		for c_ID in self.contigs:
+			R = self.degrees[c_ID][2]
+			if R==-3:
+				self.degrees[c_ID][2] = -1
+		for c_ID in self.contigs:
+			R = self.degrees[c_ID][2]
+			assert(R in [-1,1]), "We have marked all isolated with a 1 and the rest with a -1. R="+str(R)
 
-#------------------------Helper functions------------------------
-#Before:	s is a string representing a segment
-#				0    i    L
-#			s: [    |    ]
-#After:
-#	s has been split up into
-#	  0	    i               L
-#	s[0:i-1]  ->  s[i-k:L-1]
-def splitString(s,i,k,ps=False):
-	if ps:
-		print "splitString(s="+str(s)+", i="+str(i)+", k="+str(k)+")"
-	L = len(s)
-	#print "\ns: " + str(s) + ". i: " + str(i) + ". k: " + str(k) + ". L: " + str(L)
-	assert(i>=k)	#i=k is the lowest i allowed
-	#assert(i<=L-k)
-	assert(i<=L-1)	#L-1 is the highest i allowed
-	s0 = s[0:i]
-	s1 = s[i-k+1:]
-	if ps:
-		print s0,s1
-	return s0,s1
+	#---------------------------------
+	#--isPartOfTip and it's helpers:--
+	#---------------------------------
+	def existsAltPath_fw(self,MPL,a_ID,b_ID):
+		#Returns True if there exists a path fw from a_ID which doesn't go through b_ID
+		#and contains a path which breaks the MPL limit
+		#print "existsAltPath_fw(MPL="+str(MPL)+", a_ID="+str(a_ID)+", b_ID="+str(b_ID)+")"
+		#Create all paths which we can reach from a_ID, skipping B and all incoming connections of A
+		[a,a_IN,a_OUT,a_COV] = self.contigs[a_ID]
+		skipNodes = {a_ID,b_ID}
+		for (x_ID,x_B) in a_IN:
+			skipNodes.add(x_ID)
+		DC = self.getDirectChildren(a_ID,True,skipNodes)
+		for (x_ID,x_B) in DC:
+			allPaths = self.createAllPathsInContigsCollection(MPL, x_ID, skipNodes)
+			if allPaths.isEmpty():
+				return True
+		return False
 
-def reverseList(L):
-	for i, (ID,B) in enumerate(L):
-		L[i] = (ID,not B)
+	def existsAltPath_bw(self,MPL,a_ID,b_ID):
+		[a,a_IN,a_OUT,a_COV] = self.contigs[a_ID]
+		skipNodes = {a_ID,b_ID}
+		for (x_ID,x_B) in a_OUT:
+			skipNodes.add(x_ID)
+		DC = self.getDirectAncestors(a_ID,True,skipNodes)
+		for (x_ID,x_B) in DC:
+			allPaths = self.createAllPathsInContigsCollection(MPL, x_ID, skipNodes)
+			if allPaths.isEmpty():
+				return True
+		return False
 
+	def isPartOfTip(self,c_ID,MPL):
+		#Returns True if C is part of a tip. Also marks all contigs in the tip with R=2
+		#False otherwise (possibility of a false negative but not false positive)
+		#Don't mark anything when returning False
+		#print "isPartOfTip(c_ID="+str(c_ID)+", MPL="+str(MPL)+")"
+		assert(c_ID in self.contigs), "c_ID must be in the Graph"
+		[c, c_IN, c_OUT, c_COV] = self.contigs[c_ID]
+		c_inD, c_outD, R = self.degrees[c_ID]
+		assert(R in [-1,2]), "We have marked all isolated with a 1, tips with a 2 and the rest with a -1. We never call this function if C had been marked as isolated"
+		if R==2:	return True
+		if helpers.cLen(c,self.k)>=MPL: return False
+		if c_inD==1:
+			#passa að skila ekki false hér því að ég gæti haft c_inD==1 og c_outD==1 og þá vil ég einnig skoða tilfellið fyrir neðan
+			#L = helpers.cLen(c,self.k)+self.longest_fw(c_ID,MPL)
+			#C er hluti af tip ef C er hluti af isolated þegar skippa X og (til önnur leið áfram með lengd >= MPL eða isPartOfTip(x))
+			(x_ID,x_B) = self.getOtherIN(c_ID,c_IN)
+			#print c_ID, x_ID
+			if self.isPartOfIsolated(MPL,c_ID,skipNodes={x_ID}):
+				#print "Skipping x_ID="+str(x_ID)+" makes c_ID="+str(c_ID)+" isolated and therefore potentially a tip"
+				existsAltPath = False
+				if x_B and self.existsAltPath_fw(MPL,x_ID,c_ID):
+					existsAltPath = True
+				elif (not x_B) and self.existsAltPath_bw(MPL,x_ID,c_ID):
+					existsAltPath = True
+				#print "existsAltPath", existsAltPath
+				#if self.existsAltPath_fw(MPL,x_ID,c_ID):
+				if existsAltPath:
+					#print "there exists an alt path fw from x_ID="+str(x_ID)+" skipping c_ID="+str(c_ID)
+					#Mark the entire tip before returning True
+					#print "found a tip and about to mark it"
+					allPaths = self.createAllPathsInContigsCollection(MPL,c_ID,skipNodes={x_ID})
+					theContigs = allPaths.getContigIDs()
+					self.markAllContigsInSetWithNew_R(theContigs,new_R=2)
+					return True
+				#if calledFrom!=x_ID:							#To prevent infinite recursions
+				#	if self.isPartOfTip(x_ID,MPL,calledFrom=c_ID):	return True	#Endurkvæma kallið sér um að merkja collectionið sem tip
+		if c_outD==1:
+			(x_ID,x_B) = self.getOtherOUT(c_ID,c_OUT)
+			if self.isPartOfIsolated(MPL,c_ID,skipNodes={x_ID}):
+				existsAltPath = False
+				if x_B and self.existsAltPath_bw(MPL,x_ID,c_ID):
+					existsAltPath = True
+				elif (not x_B) and self.existsAltPath_fw(MPL,x_ID,c_ID):
+					existsAltPath = True
+				#print "Skipping X makes C isolated and therefore potentially a tip"
+				if existsAltPath:
+					#print "found a tip and about to mark it"
+					allPaths = self.createAllPathsInContigsCollection(MPL,c_ID,skipNodes={x_ID})
+					theContigs = allPaths.getContigIDs()
+					self.markAllContigsInSetWithNew_R(theContigs,new_R=2)
+					return True
+				#if calledFrom!=x_ID:							#To prevent infinite recursions
+				#	if self.isPartOfTip(x_ID,MPL,calledFrom=c_ID):	return True	#Endurkvæma kallið sér um að merkja collectionið sem tip
+		return False
+
+	#---------------------------------
+	#-markAllBubbles and it's helpers:
+	#---------------------------------
+	def existsPathFrom_n1_to_n2_skipping_intNodes(self,c_ID,end_ID,intNodes1,MPL):
+		#Returns intNodes2 or an empty Path
+		#c_ID is an integer
+		#end_ID is an integer
+		#intNodes1 is a Path
+		skipNodes = intNodes1.getContigIDs()
+
+		[c, c_IN, c_OUT, c_COV] = self.contigs[c_ID]
+		visited = {c_ID}		#a set storing all contigs we have visited
+		temp = Path.Path()
+		temp.append(c_ID,True,c,self.k)
+		#lenFront = helpers.cLen(c,self.k)
+		pathsInProgress = Path.PathList([temp])
+
+		#Create all possible paths which include C
+		while not pathsInProgress.isEmpty():
+			p = pathsInProgress.pop()
+			
+			#Get all child nodes of the last contig in the path
+			(e_ID,e_B) = p.getLastContigTuple()
+			DC = self.getDirectChildren(e_ID,e_B)
+			DC = helpers.DCorA_toAdd(DC,visited,skipNodes)
+
+			for (x_ID,x_B) in DC:
+				if x_ID==end_ID:
+					#We have found an alternate path from c_ID to end_ID skipping intNodes1
+					#p stores c_ID and intNodes2. if len(p)==1 intNodes2 is empty
+					if p.numContigs()>=2:
+						return p.allButFirst()
+				assert(not x_ID in skipNodes), "made sure of this above"
+				assert(not x_ID in visited), "made sure of this above"
+				visited.add(x_ID)
+				[x, x_IN, x_OUT, x_COV] = self.contigs[x_ID]
+				p.append(x_ID,x_B,x,self.k)
+				if p.lenOfAllButFirst()<MPL:
+					pathsInProgress.append(p)
+		return Path.Path()
+
+	def isFront(self, c_ID, MPL):
+		#Checks whether C is the front node in a bubble
+		#Returns [end_ID,primary,secondary] or an empty list
+		#	1. Búa til öll paths sem byrja í C (en ekki hafa C með í þeim)
+		#	   og hafa lengd < MPL þegar síðasti contig-inn er ekki talinn með
+		#      þ.e. við pælum bara í lengdinni á int. Dæmi:
+		#		              front    int    end
+		#		C->A->B->D      C->   A->B->   D
+		#		C->E->F         C->      E->   F
+		#		C->E->G	        C->      E->   G
+		#	2. Athuga hvort til alternate path frá front til end
+			#print "isFront(c_ID="+str(c_ID)+", MPL="+str(MPL)+")"
+		[c, c_IN, c_OUT, c_COV] = self.contigs[c_ID]
+		c_inD, c_outD, R = self.degrees[c_ID]
+		assert(R in [-1,1,2,3,4]), "The legal options. R="+str(R)
+		if R in [1,2]:
+			return []
+		if c_outD<1:
+			return []
+
+		#Set skipNodes as the set containing C and all of it's incoming connections
+		skipNodes = {c_ID}
+		for (x_ID,x_B) in c_IN:
+			skipNodes.add(x_ID)
+
+		firstInts = set()	#Would be {A,E} in the example above
+		for (x_ID,x_B) in c_OUT:
+			firstInts.add(x_ID)
+
+		allPaths = Path.PathList()		#Will be {[A->B->D, E->F, E->G]|} in the example above
+		for x_ID in firstInts:
+			xPaths = self.createAllPathsIncludingContig(MPL, x_ID, skipNodes, ignoringLengthOfLast=True)
+			allPaths += xPaths
+
+		#Now we have found all potential bubbles. Need to convert them from paths into sets of
+		#front_ID, I1, end_ID. Currently each Path contains I1 and end_ID
+		
+		allPaths = allPaths.filterOutPathsOfLengthLessThan2()	#Make sure each Path has a minimum length of 2 (otherwise I1 will be empty)
+		allPaths = allPaths.all2()	#Create all possible lengths from each path (i.e. all possibilities of shortening each path)
+		potentialBubbles = allPaths.toListOf_frontIntEnd(c_ID)
+
+		#Now check for alternate paths (i.e. intNodes2)
+		for front_ID, I1, end_ID in potentialBubbles:
+			I2 = self.existsPathFrom_n1_to_n2_skipping_intNodes(front_ID,end_ID,I1,MPL)
+			if not I2.isEmpty():
+				#Now we return [end_ID,primary,secondary]
+				COV1 = self.pCov(pathAsSetOfIDs=I1.getContigIDs())
+				COV2 = self.pCov(pathAsSetOfIDs=I2.getContigIDs())
+				if COV1>COV2:
+					return [end_ID,I1,I2]
+				else:
+					return [end_ID,I2,I1]
+		return []
+
+	def markBubble(self,front_ID,end_ID,primary,secondary):
+		#Helper function which marks a bubble we have found
+		#Front_ID and end_ID are the IDs of the front and end respectively
+		#primary and secondary are the two paths in the bubble. primary is the path with the higher pCov of the two paths
+		#use: self.markBubble(front_ID,end_ID,primary, secondary)
+		#print "markBubble(front_ID="+str(front_ID)+", end_ID="+str(end_ID)+", path1="+str(path1)+", path2="+str(path2)+")"
+		assert isinstance(front_ID, int), "front_ID must be an integer"
+		assert isinstance(end_ID, int), "end_ID must be an integer"
+		assert isinstance(primary, Path.Path), "primary must be a Path object"
+		assert isinstance(secondary, Path.Path), "secondary must be a Path object"
+		assert (not primary.isEmpty()), "primary can't be empty"
+		assert (not secondary.isEmpty()), "secondary can't be empty"
+		self.degrees[front_ID][2] = 3
+		self.degrees[end_ID][2] = 3
+		set1 = primary.getContigIDs()
+		set2 = secondary.getContigIDs()
+		self.markAllContigsInSetWithNew_R(set1,3,listOfTuples=False)
+		self.markAllContigsInSetWithNew_R(set2,4,listOfTuples=False)
+
+	def markAllBubbles(self,MPL):
+		#After running this function all the contigs in the set should
+		#have been marked with 0,1,2,3 or 4 depending on isolated,tip,bubble.
+		for c_ID in self.contigs:
+			c_inD, c_outD, R = self.degrees[c_ID]
+			assert(R in {-1,1,2}), "All contigs should be unanalyzed, isolated or tips when we call this function. R="+str(R)
+
+		#Finnum allar nóður C sem eru Front í bubble. Þegar við finnum slíkt
+		#C þá merkjum við C og allar nóðurnar í búbblunni.
+		for c_ID in self.contigs:
+			c_inD, c_outD, R = self.degrees[c_ID]
+			if R==-1:
+				self.isPartOfBubble(c_ID,MPL)
+
+		#Mark the contigs which are still unmarked and those we marked as not part of a bubble with a 0 instead of -1 and -2
+		for c_ID in self.contigs:
+			if self.degrees[c_ID][2] in [-1,-2]:
+				self.degrees[c_ID][2] = 0
+	
+	def isPartOfBubble(self,c_ID,MPL):
+		#Returns True if C is part of a bubble. False otherwise
+		#Marks the bubble with 3, 4 when returning True. 3 primary. 4 secondary.
+		#Marks C with a -2 when returning False to denote that we've ran this function on C
+		c_inD, c_outD, R = self.degrees[c_ID]
+		assert(R==-1), "R is unmarked. R="+str(R)
+
+		#Finnum allar nóður C sem eru Front í bubble. Þegar við finnum slíkt
+		#C þá merkjum við C og allar nóðurnar í búbblunni.
+		end_primary_secondary = self.isFront(c_ID,MPL)
+		if end_primary_secondary:	#c_ID is the front of a bubble
+			[end_ID,primary,secondary] = end_primary_secondary
+			self.markBubble(c_ID,end_ID,primary,secondary)
+			return True
+		else:
+			#Look for other potential front nodes
+			if c_inD>0:
+				PotentialFronts = self.getAllPotentialFrontsFromC(c_ID,MPL)
+				for front_ID in PotentialFronts:
+					end_primary_secondary = self.isFront(front_ID,MPL)
+					if end_primary_secondary:	#There is a bubble starting at front_ID
+						[end_ID,primary,secondary] = end_primary_secondary
+						self.markBubble(front_ID,end_ID,primary,secondary)
+
+						#If c_ID is part of the bubble: return True
+						if ((c_ID == end_ID) or (c_ID in primary) or (c_ID in secondary) ):
+							return True
+
+		#Mark that we have ran this function on C before returning False
+		self.degrees[c_ID][2] = -2
+		return False
+
+	def getAllPotentialFrontsFromC(self,c_ID,MPL):
+		#Finds and returns all nodes which are close enough to C to be candidates
+		#as first nodes in a bubble which C is a part of
+		#A->B->C
+		#Here we'd return {(B,True),(A,True)}
+		#if len(a)+len(b)+len(c) < MPL
+		[c, c_IN, c_OUT, c_COV] = self.contigs[c_ID]
+		c_inD, c_outD, R = self.degrees[c_ID]
+		if c_inD<1:
+			return []
+		
+		#Find all possible paths with length < MPL ending at C
+		potentialFronts = set()
+		visited = {c_ID}
+		L = helpers.cLen(c,self.k)
+		pathsInProgress = [( [(c_ID,True)] , L )]
+		underMaxLength = L < MPL
+		while pathsInProgress and underMaxLength:
+			contigs,L = pathsInProgress.pop()
+			(e_ID,e_B) = contigs[0]
+			DA = self.getDirectAncestors(e_ID,e_B)
+			if DA:
+				for (x_ID,x_B) in DA:
+					if not (x_ID in visited):
+						visited.add(x_ID)
+						if (self.degrees[x_ID][2] in [1,2,-2,-3]):
+							continue
+					else:
+						continue
+					[x, x_IN, x_OUT, x_COV] = self.contigs[x_ID]
+					new_contigs = list(contigs)			#create a copy of contigs
+					new_contigs.insert(0 , (x_ID,x_B))	#add x_ID to the front of the new path of contigs
+					new_L = L+helpers.cLen(x,self.k)
+					if new_L<MPL:
+						pathsInProgress.append( (new_contigs,new_L) )
+						potentialFronts.add(x_ID)	#sleppi fyrsta og síðasta (þ.e. sleppi front og end því við geymum þá sér)
+		return list(potentialFronts)
+
+	#----------------------------------------------------
+	#---analyzeAllContigsInCollection and it's helpers:--
+	#----------------------------------------------------
+	def createDegreeTable(self):
+		def getDegreesOfContig(c_ID,c_IN,c_OUT):
+			inD = 0
+			for (x_ID,x_B) in c_IN:
+				if x_ID!=c_ID:
+					inD += 1
+			outD = 0
+			for (x_ID,x_B) in c_OUT:
+				if x_ID!=c_ID:
+					outD += 1
+			return inD,outD
+
+		self.degrees = collections.defaultdict(list)
+		for c_ID,[c,c_IN,c_OUT,c_COV] in self.contigs.iteritems():
+			c_inD,c_outD = getDegreesOfContig(c_ID,c_IN,c_OUT)
+			self.degrees[c_ID] = [c_inD,c_outD, -1]
+
+	def analyzeAllContigsInCollection(self):
+		#	self.degrees[c_ID] -> [c_inD,c_outD, R]
+		#	R stores info about whether C is part of a collection of contigs which is isolated, a tip or a bubble
+		#	R = -1:	We haven't analyzed C yet
+		#	R = 1: C is a part of an isolated collection of contigs
+		#	R = 2: C is a part of a tip
+		#	R = 3: C is a primary path in a bubble
+		#	R = 4: C is a secondary path in a bubble
+		#	R = 0: We were unable to identify C as any of the above
+
+		#Create and initialize self.degrees for all contigs in the graph:
+		self.createDegreeTable()
+		for c_ID in self.contigs:
+			assert(self.degrees[c_ID][2]==-1), "All contigs should initially be marked with a -1"
+
+		#Set the maximum length for a path to be part of an isolated collection
+		#or a tip. This is also the maximum length through a bubble
+		MPL = 2*self.k
+
+		#Find and mark all isolated contigs in the graph:
+		self.markAllIsolated(MPL)
+
+		#Make sure the ratings are as expected after marking all isolated contigs
+		for c_ID in self.contigs:
+			assert(self.degrees[c_ID][2] in [-1,1]), "All contigs should either be marked as isolated, or still with a -1"
+
+		#Find and mark all tips in the graph:
+		for c_ID in self.contigs:
+			R = self.degrees[c_ID][2]
+			if R==-1:
+				self.isPartOfTip(c_ID,MPL)	#Merkir í leiðinni C með 2 ef C er tip
+			else:
+				assert(R in [1,2]), "All contigs should be marked with a -1, 1 or 2. R="+str(R)
+
+		#Make sure the ratings are as expected after marking all tips
+		for c_ID in self.contigs:
+			R = self.degrees[c_ID][2]
+			assert(R in [-1,1,2]), "All contigs should either be marked as isolated, tips or with a -1"
+
+		#Find and mark all bubbles:
+		self.markAllBubbles(MPL)
+
+		#Make sure the ratings are as expected after marking all bubbles
+		for c_ID in self.contigs:
+			R = self.degrees[c_ID][2]
+			assert(R in [0,1,2,3,4]), "R="+str(R)+". We should have marked all contigs as part of isolated, tip, bubble or non of the three"
+
+	#---------------------------------------------------------------
+	#---------------------------------------------------------------
+	#Helpful functions for working with isolated tips and bubbles:
+	#---------------------------------------------------------------
+	#---------------------------------------------------------------
+	def getDirectAncestors(self,c_ID,c_B,skipNodes=set()):
+		A = set()
+		[c, c_IN, c_OUT, c_COV] = self.contigs[c_ID]
+		if c_B:
+			for (x_ID,x_B) in c_IN:
+				if not x_ID in skipNodes:
+					A.add((x_ID,c_B&x_B))
+		elif not c_B:
+			for (x_ID,x_B) in c_OUT:
+				if not x_ID in skipNodes:
+					A.add((x_ID,c_B&x_B))
+		return A
+
+	def getDirectChildren(self,c_ID,c_B,skipNodes=set()):
+		A = set()
+		[c, c_IN, c_OUT, c_COV] = self.contigs[c_ID]
+		if c_B:
+			for (x_ID,x_B) in c_OUT:
+				if not x_ID in skipNodes:
+					A.add((x_ID,c_B&x_B))
+		elif not c_B:
+			for (x_ID,x_B) in c_IN:
+				if not x_ID in skipNodes:
+					A.add((x_ID,c_B&x_B))
+		return A
+
+	def markAllContigsInSetWithNew_R(self,contigSet,new_R,listOfTuples=False):
+		#print "markAllContigsInSetWithNew_R(contigSet="+str(contigSet)+", new_R="+str(new_R)+", listOfTuples="+str(listOfTuples)+")"
+		if listOfTuples:
+			for (c_ID,c_B) in contigSet:
+				assert(c_ID in self.contigs), "c_ID must be in the graph. c_ID="+str(c_ID)
+				assert(c_ID in self.degrees), "c_ID must have been assigned a degree. c_ID="+str(c_ID)
+				self.degrees[c_ID][2] = new_R
+		else:
+			for c_ID in contigSet:
+				assert(c_ID in self.contigs), "c_ID must be in the graph. c_ID="+str(c_ID)
+				assert(c_ID in self.degrees), "c_ID must have been assigned a degree. c_ID="+str(c_ID)
+				self.degrees[c_ID][2] = new_R
+
+	def findAllConnectedContigs(self,c_ID,skipNode=-1):
+		#returns all contigs which can be reached from C
+		#print "findAllConnectedContigs(c_ID="+str(c_ID),", skipNode="+str(skipNode)+")"
+		visited = set()
+		toExplore = {c_ID}
+		if skipNode!=-1:
+			visited.add(skipNode)
+		while toExplore:
+			e_ID = toExplore.pop()
+			[e, e_IN, e_OUT, e_COV] = self.contigs[e_ID]
+			visited.add(e_ID)
+			for (x_ID,x_B) in e_IN:
+				if not x_ID in visited:
+					toExplore.add(x_ID)
+			for (x_ID,x_B) in e_OUT:
+				if not x_ID in visited:
+					toExplore.add(x_ID)
+		if skipNode!=-1:
+			visited.remove(skipNode)
+			assert(not skipNode in visited), "skipNode should not be in the set of visited nodes"
+		assert(c_ID in visited), "bla"
+		return visited
+
+	def pCov(self,pathAsSetOfIDs):
+		#We define pCov(path P) as the sum of cCov(C) for all contigs C in P.
+		assert(isinstance(pathAsSetOfIDs,set))
+		sum = 0
+		for c_ID in pathAsSetOfIDs:
+			[c,c_IN,c_OUT,c_COV] = self.contigs[c_ID]
+			sum+=c_COV
+		return sum
 
 if __name__ == "__main__":
-	G = Graph(3)
-	#b: b_ID=0
-	G.contigs[G.getID()] = ["AGT",[(99,True)],[(3,True),(4,True)],0]
-	G.contigs[G.getID()] = ["TCA",[],[(99,True)],0] #1
-	G.contigs[G.getID()] = ["ACA",[],[(99,True)],0] #2
-	G.contigs[G.getID()] = ["GTT",[(0,True)],[],0]  #3
-	G.contigs[G.getID()] = ["GTA",[(0,True)],[],0]  #4
-	G.contigs[G.getID()] = ["TGG",[(99,False)],[],0] #5
-
-	"""
-	AGT
-	ACT
-	TCA
-	TGA
-	ACA
-	TGT
-	GTT x
-	AAC x
-	GTA
-	TAC
-	TGG
-	CCA
-	CAG
-	CTG
-	"""
-
-
-
-	#TGG
-	#CCA
-	#a: a_ID=99
-	G.setID(99)
-	G.contigs[G.getID()] = ["CAG",[(1,True),(2,True),(5,False)],[(0,True)],0]
+	k = 5
+	MPL = 2*k
+	G = Graph(k)
+	G.contigs[G.getID()] = ["CAGGTATCCAT",[],[(1,True)],0]  #7 k-mers
+	G.contigs[G.getID()] = ["CCATTT",[(0,True)],[],0]       #2 k-mers
 	G.addKmersFromAllContigs()
-	print "Before merge:"
-	print G.isLegal()
-	G.printContigs("G")
-	#G.mergeSegment(99)
-	#print "After merge:"
-	#G.printContigs("G")
-	#self.assertTrue(G.isLegal())
-	#self.assertTrue(G_correct.isLegal())
-	#self.assertTrue(isSameGraph(G,G_correct))
+	G.createDegreeTable()
+	P0_1 = G.createAllPathsIncludingContig(MPL, 0, {1})
+	#P1_0 = G.createAllPathsIncludingContig(MPL, 1, [0])
+	print P0_1
+	#print P1_0
+	"""
+	G = Graph(5)
+	G.contigs[G.getID()] = ["CAGGT",[],[(1,True)],0]
+	G.contigs[G.getID()] = ["AGTTA",[(0,True)],[],0]
+	G.addKmersFromAllContigs()
+	MPL = 2*G.k 
+	G.degrees = collections.defaultdict(list)
+	for c_ID,[c,c_IN,c_OUT,c_COV] in G.contigs.iteritems():
+		c_inD,c_outD = G.getDegreesOfContig(c_ID,c_IN,c_OUT)
+		G.degrees[c_ID] = [c_inD,c_outD, -1]
 
-	#NOTE: I need to write a test to actually check whether this result is correct. Felt creating a
-	#G_correct was too much work. Checked this manually so this test is quite informal
+	print G.isPartOfTip(0,MPL)
+	#G = Graph(5)
+	#G.addSegmentToGraph("AAACGGGTTGGCGATTTG")
+	#G.addSegmentToGraph("CCCCC")
+	#print G.findAllConnectedContigs(30)
+	#print G.findAllConnectedContigs(31)
+	#print G.isPartOfIsolated("CCCCC")
+	#print G.isPartOfIsolated("TTGAA")
+	#print G.LP_fw(0, 2*5, 0)
+	#print G.isPartOfIsolated("AAACG")
+	#print G.isPartOfIsolated("CCCCC")
+	"""
+
+
+	'''
+	G = Graph(7)
+	#Just so the bubble isn't isolated
+	G.addSegmentToGraph("AAGCGTTGGTAAGTCAGTGGATC")	
+	#The bubble itself
+	G.addSegmentToGraph("TTGGATC")
+	G.addSegmentToGraph( "TGGATCTTAGACT")
+	G.addSegmentToGraph( "TGGATCATAGACT")
+	G.addSegmentToGraph(        "TAGACTT")
+	G.printContigs()
+	G.analyzeAllContigsInCollection()
+	G.printContigsWithRatings()
+	'''
+
+	

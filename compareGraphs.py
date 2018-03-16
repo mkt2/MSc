@@ -1,9 +1,7 @@
 #coding:utf8
-
 import Graph, dbg
 import sys, collections
 from BF_counter import BF_counter_naive
-
 
 #Before:	G1 and G2 represent two legal DBGs
 #After:		returns True if G1 and G2 are the same DBG. Otherwise returns False
@@ -100,10 +98,9 @@ def isSameGraph(G1,G2,alsoCompareWithNaive=True,pfn=False,ps=False,relaxAssertio
 	else:
 		return True
 
-
 #Before:	G1 and G2 are DBG graphs
 #After:		return True if G1 and G2 have the same contigs (or twins). return False otherwise
-def sameContigs(G1,G2,pfn=True,ps=True):
+def sameContigs(G1,G2,pfn=False,ps=False):
 	if pfn:
 		print "sameContigs(G1,G2)"
 	if not len(G1.contigs)==len(G2.contigs):
@@ -126,11 +123,10 @@ def sameContigs(G1,G2,pfn=True,ps=True):
 	#if we get here it means that every c_1 in G1 is also in G2. len(G1)==len(G2) => G1 and G2 have the same contigs
 	return True
 
-
 #Before:	G1 and G2 are DBG graphs
 #			G1 and G2 have the same contigs
 #After:		return True if the contigs in G1 and G2 have the same IDs (or twins). return False otherwise
-def sameIDs(G1,G2,pfn=True,ps=True):
+def sameIDs(G1,G2,pfn=False,ps=False):
 	if pfn:
 		print "sameIDs(G1,G2)"
 	#idea:
@@ -146,12 +142,11 @@ def sameIDs(G1,G2,pfn=True,ps=True):
 			return False
 	return True
 
-
 #Before:	G1 and G2 are DBG graphs
 #			G1 and G2 have the same contigs 
 #			Some contig c does not have the same ID in G1 and G2
 #After:		all contigs c have the same ID in G1 and G2
-def fixIDs(G1,G2,pfn=True,ps=True):
+def fixIDs(G1,G2,pfn=False,ps=False):
 	if pfn:
 		print "fixIDs(G1,G2)"
 	#Step 1: Create a list of all changes we wish to make for G1 and G2 respectively
@@ -203,13 +198,12 @@ def fixIDs(G1,G2,pfn=True,ps=True):
 	#G1.setID(newID)
 	#G2.setID(newID)
 
-
 #Before:	G1 and G2 are DBG graphs
 #			G1 and G2 have the same contigs 
 #			All contigs c have the same ID in G1 and G2
 #			Contigs in G1 may be twins of contigs with same ID in G2 (and vice versa)
 #After:		All contigs c1 with ID ID in G1 are the EXACT same contig as the contig with that ID in G2
-def fixTwins(G1,G2,pfn=True,ps=True):
+def fixTwins(G1,G2,pfn=False,ps=False):
 	if pfn:
 		print "fixTwins(G1,G2)"
 	if ps:
@@ -224,14 +218,12 @@ def fixTwins(G1,G2,pfn=True,ps=True):
 				G2.flipContig(ID_2)
 				break
 
-
-
 #Before:	G1 and G2 are DBG graphs
 #			G1 and G2 have the same contigs 
 #			All contigs c have the same ID in G1 and G2
 #			All contigs c1 with ID ID in G1 are the EXACT same contig as the contig with that ID in G2
 #After:		True if all contigs c have the same IN, OUT and COV in G1 and G2
-def same_INs_OUTs_COV(G1,G2,pfn=True,ps=True):
+def same_INs_OUTs_COV(G1,G2,pfn=False,ps=False):
 	if pfn:
 		print "same_INs_OUTs_COV(G1,G2)"
 	if G1.isEmpty() and G2.isEmpty():
@@ -260,18 +252,6 @@ def same_INs_OUTs_COV(G1,G2,pfn=True,ps=True):
 			raise Exception("G1 and G2 don't have the same contigs!")
 		found = False
 	return True
-
-"""
-def graphEqualsNaive(G,G_naive=-1,pfn=True,ps=True):
-	if pfn:
-		print "graphEqualsNaive(G,G_naive)"
-	if G_naive==-1:
-		G_naive = G.createNaive()
-	if ps:
-		G.printContigs("G")
-		G_naive.printContigs("G_naive")
-	return isSameGraph(G,G_naive,False,pfn,ps,relaxAssertions=False)
-"""
 
 if __name__ == "__main__":
     k = 3

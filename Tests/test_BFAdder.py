@@ -1,178 +1,15 @@
 #coding:utf8
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 import Graph
-from compareGraphs import *
-from BF_counter import *
-import random
-import itertools
+import BFAdder
 import dbg
+import collections
 
-def createCorrectDict(segments,k):
-    kmerDict_correct = collections.defaultdict(int)
-    for segment in segments:
-        for km in dbg.kmers(segment,k):
-            if km not in kmerDict_correct:
-                kmerDict_correct[km] = 0
-            else:
-                kmerDict_correct[km] += 1
-        for km in dbg.kmers(dbg.twin(segment),k):
-            if km not in kmerDict_correct:
-                kmerDict_correct[km] = 0
-            else:
-                kmerDict_correct[km] += 1
 
-    #Throw all kmers that occur only once:
-    kmerDict_correct = {k:v for k,v in kmerDict_correct.items() if v != 0}
-    return kmerDict_correct
 
-def createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn):
-    if pfn:
-        print "createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn)"
-    kmerDict = collections.defaultdict(int)
-    for segment,lineNr in generateSegmentsFrom_fq(fn,k,BF,pfn):
-        assert isinstance(segment,str)
-        for km in dbg.kmers(segment,k):
-            kmerDict[km] += 1
-        for km in dbg.kmers(dbg.twin(segment),k):
-            kmerDict[km] += 1
-    if pfn:
-        print "Printing the kmerDict"
-        for km in kmerDict:
-            print km
-        print kmerDict
-    return kmerDict
-
-def checkCorrectness(dict1,dict2):
-    if not len(dict1)==len(dict2):
-        print len(dict1), len(dict2)
-        raise Exception("The dicts must have the same length")
-    for km in dict1:
-        if not km in dict2:
-            raise Exception("The dicts must have the same kmers")
-
-class Test_generateSegmentsFrom_fq(unittest.TestCase):
-    def test_1(self):
-        fn = ["Input/read1.fq"]
-        k = 3
-        numberOfKmers=100
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        segments = ["AAGTTGCGCTAGGGTTAAACTCGGCTAACTCGATTAACATCAGCCGTTTGGTGGCGCAGATTTGCTACTA"]
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-        #self.assertEqual(segments,["AAGTTGCGCTAGGGTTAAACTCGGCTAACTCGATTAACATCAGCCGTTTGGTGGCGCAGATTTGCTACTA"])
-
-    def test_2(self):
-        fn = ["Input/read4.fq"]
-        k = 3
-        numberOfKmers=1000
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        segments = ["AAGTTGCGCTAGGGTTAAACTCGGCTAACTCGATTAACATCAGCCGTTTGGTGGCGCAGATTTGCTACTA","CGCCGCCATGCCGACCATCCCTTTCATCCCCGTACCAGACACGCTGACCATTGCCATGTTATTCAGATTG","TGATCTTTCAGATTGTAGAGTTTCATTTAGTTTACCAGTACTCGTGCGCCCGCCGAATCCAGGCGTCAAA","ACTTTCCCTGGTTCTGGTCGCTCCCATGGCAGCACAGGCTGCTGAAATTACGTTAGTCCCGTCATTAAAA"]
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-
-    def test_3(self):
-        fn = ["Input/read4.fq","Input/read1.fq"]
-        k = 3
-        numberOfKmers=1000
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        segments = ["AAGTTGCGCTAGGGTTAAACTCGGCTAACTCGATTAACATCAGCCGTTTGGTGGCGCAGATTTGCTACTA","CGCCGCCATGCCGACCATCCCTTTCATCCCCGTACCAGACACGCTGACCATTGCCATGTTATTCAGATTG","TGATCTTTCAGATTGTAGAGTTTCATTTAGTTTACCAGTACTCGTGCGCCCGCCGAATCCAGGCGTCAAA","ACTTTCCCTGGTTCTGGTCGCTCCCATGGCAGCACAGGCTGCTGAAATTACGTTAGTCCCGTCATTAAAA"]
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-
-    def test_4(self):
-        fn = ["Input/Test_generateSegmentsFrom_fq/test_4.fq"]
-        segments=["ATC","AAAAAA","CTA","TAG"]
-        k = 3
-        numberOfKmers=20
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-
-    def test_5(self):
-        fn = ["Input/Test_generateSegmentsFrom_fq/test_5.fq"]
-        segments=["AAA"]
-        k = 3
-        numberOfKmers=20
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-
-    def test_6(self):
-        fn = ["Input/Test_generateSegmentsFrom_fq/test_6.fq"]
-        segments=["AAAA"]
-        k = 3
-        numberOfKmers=20
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-
-    def test_7(self):
-        fn = ["Input/Test_generateSegmentsFrom_fq/test_7.fq"]
-        segments=["AAAAA"]
-        k = 3
-        numberOfKmers=20
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-
-    def test_8(self):
-        fn = ["Input/Test_generateSegmentsFrom_fq/test_8.fq"]
-        segments=["AAAAAA"]
-        k = 3
-        numberOfKmers=20
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-
-    def test_9(self):
-        fn = ["Input/Test_generateSegmentsFrom_fq/test_9.fq"]
-        segments=["AAA","AAA"]
-        k = 3
-        numberOfKmers=20
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-
-    def test_10(self):
-        fn = ["Input/Test_generateSegmentsFrom_fq/test_10.fq"]
-        segments=["AAA","TTT"]
-        k = 3
-        numberOfKmers=20
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)
-        self.assertTrue(BF.hasAcceptableRatio())
-
-    def test_11(self):
-        fn = ["Input/Test_generateSegmentsFrom_fq/test_11.fq"]
-        segments=["AAACCGTACGATCA"]
-        k = 3
-        numberOfKmers=30
-        BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
-        kmerDict_correct = createCorrectDict(segments,k)
-        kmerDict = createDictUsing_generateSegmentsFromfq(fn,k,BF,pfn=False)
-        checkCorrectness(kmerDict,kmerDict_correct)        
-        self.assertTrue(BF.hasAcceptableRatio())
-
+"""Man ekki hvernig ég bjó til þessar skrár sem testin nota þ.a. ég kommenta þetta út til að byrja með
 class Test_BF_counter_naive(unittest.TestCase):
     def test_1(self):
         fn = ["Input/Test_BF_counter_naive/test_1.fq"]
@@ -304,6 +141,7 @@ class Test_BF_counter_naive(unittest.TestCase):
         self.assertTrue(isSameGraph(G_naive,G_correct))
         self.assertTrue(BF.hasAcceptableRatio())
 
+Sjá print skipanir í main fallinu
 class Test_BF_counter(unittest.TestCase):
     def test_1(self):
         fn = ["Input/Test_BF_counter/test_1.fq"]
@@ -312,7 +150,8 @@ class Test_BF_counter(unittest.TestCase):
         numberOfKmers = 50
         BF = Bloom.Bloom(0.0001,numberOfKmers,pfn=False)
         G = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False)
-        BF_counter(fn,BF,k,G,pfn=False,printProgress=False)
+        #def BF_counter(fn,k,BF,G,IK,maxCov,pfn=False,printProgress=False,startAtLine=0,skipPictures=False)
+        BF_counter(fn,k,BF,G,pfn=False,printProgress=False)
         G_correct = Graph.Graph(3)
         G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True)],0]
         G_correct.contigs[G_correct.getID()] = ["TAG",[(1,False),(1,False)],[],0] #twin: CTA
@@ -362,6 +201,32 @@ class Test_BF_counter(unittest.TestCase):
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=True,pfn=False,ps=False,relaxAssertions=False))
         self.assertTrue(BF.hasAcceptableRatio())
+"""
+
+
+#First we test the naive functions in order:
+class Test_naive_createDict(unittest.TestCase):
+    def helper(self):
+        #fn = ["testData/num3_len5_r1.fq","testData/num3_len5_r2.fq"]
+        fn = ["Input/testData/num3_len5_r1.fq","Input/testData/num3_len5_r2.fq"]
+        k = 5
+        return fn,k
+
+    def test_1(self):
+        fn,k = self.helper()        
+        kd = BFAdder.naive_createDict(fn,k)
+        print kd
+
+        kmerList = ["AAAAA","TTTTT","CCCCC","GGGGG","AAAAT","ATTTT"]
+        for km in kmerList:
+            self.assertTrue(km in kd),"All kmers in kmerList should be in the kmerdict"
+        for km in kd:
+            self.assertTrue(km in kmerList),"All kmers in the kmerdict should be in the kmerList"
+        print kmerList
+
+    def test_2(self):
+        pass
+
 
 if __name__ == '__main__':
     unittest.main()

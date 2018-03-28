@@ -123,6 +123,20 @@ def print_GFA(G,cs,k):
         for j,o in G[i][1]:
             print "L\t%d\t-\t%d\t%s\t%dM"%(i,j,o,k-1)
     
+def print_GFA_to_file(G,cs,k,fileName):
+    print "print_GFA_to_file(fileName="+str(fileName)+")"
+    f = open(fileName, 'w')
+    f.write("H\tVN:Z:1.0\n")
+    for i,x in enumerate(cs):
+        f.write("S\t%d\t%s\t*\n"%(i,x))
+        
+    for i in G:
+        for j,o in G[i][0]:
+            f.write("L\t%d\t+\t%d\t%s\t%dM\n"%(i,j,o,k-1))
+        for j,o in G[i][1]:
+            f.write("L\t%d\t-\t%d\t%s\t%dM\n"%(i,j,o,k-1))
+    f.close()
+
 def createGraphObject(G,cs,k,GraphObject,pfn=False,ps=False):
     if pfn:
         print createGraphObject.__name__

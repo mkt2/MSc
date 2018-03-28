@@ -1,4 +1,6 @@
 #coding:utf8
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 from compareGraphs import *
 import Graph
@@ -126,7 +128,7 @@ class Test_sameIDs(unittest.TestCase):
         G1.contigs[1] = ["TAG",[(1,False),(1,False)],[],0] #twin: CTA
         G2.contigs[1] = ["AAA",[(1,True)],[(1,True)],0]
         G2.contigs[0] = ["TAG",[(0,False),(0,False)],[],0] #twin: CTA
-        print sameIDs(G1,G2)
+        self.assertFalse(sameIDs(G1,G2))
 
 class Test_fixIDs(unittest.TestCase):
     def allIsEqual(self,G1,G2,text):
@@ -160,11 +162,7 @@ class Test_fixIDs(unittest.TestCase):
         G2 = Graph.Graph(3)
         G1.contigs[0] = ["ATT",[(0,False),(0,False)],[],0]
         G2.contigs[1] = ["ATT",[(1,False),(1,False)],[],0]
-        G1.printContigs("G1")
-        G2.printContigs("G2")
         self.helper(G1,G2)
-        G1.printContigs("G1")
-        G2.printContigs("G2")
 
     def test_3(self):
         #Two graphs with 2 different IDs
@@ -196,11 +194,7 @@ class Test_fixIDs(unittest.TestCase):
         G2.contigs[G2.getID()] = ["ATT",[],[],0]
         G1.contigs[G1.getID()] = ["GGG",[],[],0]
         G2.contigs[G2.getID()] = ["CCC",[],[],0]
-        G1.printContigs("G1")
-        G2.printContigs("G2")
         self.helper(G1,G2,"skip")
-        G1.printContigs("G1")
-        G2.printContigs("G2")
 
     def test_6(self):
         G1 = Graph.Graph(3)
@@ -208,11 +202,7 @@ class Test_fixIDs(unittest.TestCase):
         G1.contigs[G1.getID()] = ["ATT",[(0,False),(0,False)],[],0]
         G2.ID = 3568
         G2.contigs[3567] = ["ATT",[(3567,False),(3567,False)],[],0]
-        G1.printContigs("G1")
-        G2.printContigs("G2")
         fixIDs(G1,G2)
-        G1.printContigs("G1")
-        G2.printContigs("G2")
         self.assertTrue(sameIDs(G1,G2))
 
     def test_7(self):
@@ -221,11 +211,7 @@ class Test_fixIDs(unittest.TestCase):
         G1.contigs[G1.getID()] = ["ATT",[(0,False),(0,False)],[],0]
         G2.ID = 3568
         G2.contigs[3567] = ["AAT",[],[(3567,False),(3567,False)],0]
-        G1.printContigs("G1")
-        G2.printContigs("G2")
         fixIDs(G1,G2)
-        G1.printContigs("G1")
-        G2.printContigs("G2")
         self.assertTrue(sameIDs(G1,G2))
 
     def test_8(self):
@@ -235,11 +221,7 @@ class Test_fixIDs(unittest.TestCase):
         G1.contigs[G1.getID()] = ["TTT",[(0,True)],[(0,True)],0]
         G2.getID()
         G2.contigs[G2.getID()] = ["TTT",[(1,True)],[(1,True)],0]
-        G1.printContigs("G1")
-        G2.printContigs("G2")
         self.helper(G1,G2)
-        G1.printContigs("G1")
-        G2.printContigs("G2")
 
     def test_9(self):
         G1 = Graph.Graph(3)
@@ -249,9 +231,6 @@ class Test_fixIDs(unittest.TestCase):
         G2.contigs[G2.getID()] = ["TAG",[(0,False),(0,False)],[],0] #twin: CTA
         G2.contigs[G2.getID()] = ["AAA",[(1,True)],[(1,True)],0]
         self.helper(G1,G2)
-        G1.printContigs("G1")
-        G2.printContigs("G2")
-
 
 class Test_fixTwins(unittest.TestCase):
     def allIsEqual(self,G1,G2,index):
@@ -378,7 +357,6 @@ class Test_same_INs_OUTs_COV(unittest.TestCase):
         self.assertTrue(same_INs_OUTs_COV(G1,G2))
         self.assertFalse(same_INs_OUTs_COV(G1,G3))
         
-
 class Test_isSameGraph(unittest.TestCase):
     def test_1(self):
         #Two empty graphs
@@ -471,7 +449,6 @@ class Test_isSameGraph(unittest.TestCase):
 
         self.assertTrue(isSameGraph(G1,G2))
 
-
 class Test_graphsEqualsNaive(unittest.TestCase):
     def test_1(self):
         G = Graph.Graph(3)
@@ -484,7 +461,6 @@ class Test_graphsEqualsNaive(unittest.TestCase):
         G.addSegmentToGraph("AAATCC")
         G.addKmersFromAllContigs()
         self.assertTrue(G.equalsNaive())
-
 
 if __name__ == '__main__':
     unittest.main()

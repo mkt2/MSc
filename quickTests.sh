@@ -1,6 +1,6 @@
 #!/bin/bash
 #coding:utf8
-python Tests/test_BF_counter.py
+python Tests/test_BFAdder.py
 python Tests/test_Bloom.py Test_Bloom.test_01
 python Tests/test_Bloom.py Test_Bloom.test_02
 python Tests/test_Bloom.py Test_Bloom.test_03

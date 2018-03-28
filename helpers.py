@@ -5,10 +5,19 @@ import os.path
 import Graph
 import time
 import sys
+from math import ceil
+#sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 alphabet = ["A","C","G","T","N"]
 
 #------------------------Helper functions------------------------
+def fix_i(i,L,k):
+    #L is the length of a segment
+    #i is the first index of the k-mer
+    #k is the k-mer length
+    #Takes the index in the twin and returns the index in the sequence
+    return L-k-i
+
 def splitString(s,i,k,ps=False):
     #Before:    s is a string representing a segment
     #               0    i    L
@@ -30,9 +39,202 @@ def splitString(s,i,k,ps=False):
         print s0,s1
     return s0,s1
 
+def splitCov(s0,s1,k,COV):
+    #pre:   s0 and s1 are outputs of splitString(s,i,k)
+    L0 = float(cLen(s0,k))
+    L1 = cLen(s1,k)
+    COV0 = int(ceil(float(COV)*(L0/(L0+L1))))
+    COV1 = COV - COV0
+    assert(COV0>=2), "COV0="+str(COV0)+". COV="+str(COV)
+    assert(COV1>=2), "COV1="+str(COV1)
+    return COV0, COV1
+
 def reverseList(L):
     for i, (ID,B) in enumerate(L):
         L[i] = (ID,not B)
+
+def assert_isKmer(km,k):
+    assert(isinstance(km,str)), "The k-mer must be a str"
+    assert(len(km)==k), "The k-mer must be of length k"
+
+"""
+def splitOnSeen(s,k,kmersIn_s,out=[]):
+    #kmersIn_s=collections.defaultdict(int)
+    #splits a sequence s up into sub sequences where we skip k-mers previously seen in s
+    #if no k-mers occur twice in s then we return [s]
+    if len(s)<=k:
+        return out
+    for i, km in enumerate(dbg.kmers(s,k)):
+        rep_km = min(km,dbg.twin(km))
+        if not (rep_km in kmersIn_s):
+            kmersIn_s[rep_km] += 2
+        else:   #rep_km in kmersIn_s
+            kmersIn_s[rep_km] += 1
+            #We have seen s[i:i+k] before
+            #split s into s[0:i+k-1]    s[i:i+k]    s[i+1:]
+            #             add to out     throw     recursion
+            if i==0:
+                return splitOnSeen(s[1:],k,kmersIn_s,out)
+            else:
+                out.append(s[0:i+k-1])
+                if i==len(s)-k:
+                    return out
+                else:
+                    return splitOnSeen(s[i+1:],k,kmersIn_s,out)
+    return out+[s]
+"""
+
+def splitOnConnToSelf(s,k,COV):
+    #print "splitOnConnToSelf(s="+str(s)+")"
+    L = len(s)
+    if L < k:
+        yield "", 0
+    if L==k:
+        yield s, COV
+    else:
+        splitSomething = True
+        while splitSomething:
+            splitSomething = False
+            for i, a in enumerate(dbg.kmers(s,k)):
+                a_twin = dbg.twin(a)
+                #First split where internal k-mers in s connect to themselves:
+                if i!=L-k:
+                    #If a is not the last km in s we split behind a if it connects to itself:
+                    #if canConnToSelfFront(a,k):
+                    #canConn(a,a,True,True,k,False) or canConn(a,a,True,False,k,False)
+                    for y in dbg.fw(a):
+                        if (y==a) or (y==a_twin):
+                            #print "case 1. a="+str(a)+", s="+str(s)+", i="+str(i)
+                            s0, s = splitString(s,i+k,k)
+                            COV0, COV = splitCov(s0,s,k,COV)
+                            yield s0, COV0
+                            splitSomething = True
+                            break
+                    if splitSomething:  #To break out of the outer for-loop as well
+                        break
+                if i!=0: 
+                    #If a is not the first km in s we  split in front of a if it connects to itself:
+                    #if canConnToSelfBack(a,k):
+                    #canConn(a,a,True,True,k,False) or canConn(a,a,False,True,k,False)
+                    for y in dbg.bw(a):
+                        if y==a_twin:   #Tékkaði á a->a í lúppunni áðan
+                            #print "case 2. a="+str(a)
+                            s0, s = splitString(s,i+k-1,k)
+                            COV0, COV = splitCov(s0,s,k,COV)
+                            yield s0, COV0
+                            splitSomething = True
+                            break
+                    if splitSomething:  #To break out of the outer for-loop as well
+                        break
+                assert(splitSomething==False)
+                #Now split where internal k-mers in s connect to other k-mers in s
+                if i<L-k-1:
+                    #a is neither the last nor second to last k-mer in s
+                    #   so b may be the last k-mer but not out of bounds
+                    for j, b in enumerate(dbg.kmers(s[i+1:],k),start=i+1):
+                        b_twin = dbg.twin(b)
+                        if i!=L-k:	#a is not the last km in s
+                            #Check if we have a non trivial forward connection:
+                            #if canConn(a,b,True,False,k) or (canConn(a,b,True,True,k) and (j!=i+1)):
+                            for y in dbg.fw(a):
+                                if (y==b_twin) or ((j!=i+1) and (y==b)):
+                                    #print "case 3. a="+str(a)+". b="+str(b)
+                                    s0, s = splitString(s,i+k,k)	#split behind a
+                                    COV0, COV = splitCov(s0,s,k,COV)
+                                    yield s0, COV0
+                                    splitSomething = True
+                                    break
+                            if splitSomething:  #To break out of the outer for-loop as well
+                                break
+                        if i!=0:	#a is not the last km in s
+                            #Check if we have a non trivial backward connection:
+                            #if canConn(b,a,False,True,k) or (canConn(b,a,True,True,k) and (j!=i-1)):
+                            for y in dbg.bw(a):
+                                if (y==b_twin) or ((j!=i-1) and (y==b)):
+                                    #print "case 4 a="+str(a)+". b="+str(b)
+                                    s0, s = splitString(s,i+k-1,k)	#split in front of a
+                                    COV0, COV = splitCov(s0,s,k,COV)
+                                    yield s0, COV0
+                                    splitSomething = True
+                                    break
+                            if splitSomething:  #To break out of the outer for-loop as well
+                                break
+                        assert(splitSomething==False)
+                    if splitSomething:  #To break out of the outer for-loop as well
+                        break
+		#If we didn't need to split anywhere we know that s
+		#doesn't need to be split further due to connections to itself
+        assert(splitSomething==False)
+        yield s, COV
+
+def canConn(a,b,A,B,k,assertStuff=False):
+    #Returns True if k-mers a and b cann connect together
+    #according to booleans A and B
+    if assertStuff:
+        assert_isKmer(a,k)
+        assert_isKmer(b,k)
+        assert(isinstance(A,bool)), "A must be a boolean"
+        assert(isinstance(B,bool)), "B must be a boolean"
+        assert(isinstance(k,int)), "k must be an integer"
+    if (A==True) and (B==True):
+        for y in dbg.fw(a):
+            if y==b:
+                return True
+        return False
+        #return a[1:]==b[:-1]
+    if (A==True) and (B==False):
+        for y in dbg.fw(a):
+            if y==dbg.twin(b):
+                return True
+        return False
+        #return a[1:]==dbg.twin(b)[:-1]
+    if (A==False) and (B==True):
+        for y in dbg.bw(b):
+            if y==dbg.twin(a):
+                return True
+        return False
+        #return dbg.twin(a)[1:]==b[:-1]
+    if (A==False) and (B==False):
+        for y in dbg.fw(b):
+            if y==a:
+                return True
+        return False
+        #return canConn(b,a,True,True,k,False)
+
+def canConnFromTo(a,b,k,assertStuff=True):
+    #returns True if a->b or a->twin(b) possible
+    if assertStuff:
+        assert_isKmer(a,k)
+        assert_isKmer(b,k)
+        assert(isinstance(k,int)), "k must be an integer"
+    return canConn(a,b,True,True,k,False) or canConn(a,b,True,False,k,False)
+
+def canConnToFrom(a,b,k,assertStuff=True):
+    #returns True if b->a or twin(b)->a possible
+    if assertStuff:
+        assert_isKmer(a,k)
+        assert_isKmer(b,k)
+        assert(isinstance(k,int)), "k must be an integer"
+    return canConn(b,a,True,True,k,False) or canConn(b,a,False,True,k,False)
+
+def canConnToSelf(a,k,assertStuff=True):
+    if assertStuff:
+        assert_isKmer(a,k)
+        assert(isinstance(k,int)), "k must be an integer"
+    return canConn(a,a,True,True,k,False) or canConn(a,a,True,False,k,False) or canConn(a,a,False,True,k,False)
+
+def canConnToSelfFront(a,k,assertStuff=True):
+    #Returns True if the front of a can connect to a og twin(a)
+    if assertStuff:
+        assert_isKmer(a,k)
+        assert(isinstance(k,int)), "k must be an integer"
+    return canConn(a,a,True,True,k,False) or canConn(a,a,True,False,k,False)
+
+def canConnToSelfBack(a,k,assertStuff=True):
+    if assertStuff:
+        assert_isKmer(a,k)
+        assert(isinstance(k,int)), "k must be an integer"
+    return canConn(a,a,True,True,k,False) or canConn(a,a,False,True,k,False)
 
 #Before:    c is a string representing a contig
 #After:     Returns the number of k-mers in c
@@ -43,17 +245,11 @@ def cLen(c,k):
     assert(num_kmers==num_kmers_fast), "num_kmers_fast should return the number of k-mers."+str(num_kmers)+", "+str(num_kmers_fast)
     return num_kmers_fast
 
-#Skilar öllum k-merum sem koma fyrir í kd1 en ekki í kd2 sem mengi
-#I.e. skilar mismengi kd1 og kd2
-def difference(kd1,kd2):
-    return { x : kd1[x] for x in set(kd1) - set(kd2) }
-
 def getIDsFromSetOfKmers(G,kmerSet):
     ids = set()
     for km in kmerSet:
         ids.add(G.kmers[km][0])
     return ids
-
 
 #Returns a set containing all nodes (as tuples) from DCorA which neither occur in visited nor skipNodes
 def DCorA_toAdd(DCorA,visited,skipNodes):
@@ -69,41 +265,6 @@ def file_len(fname):
             pass
     return i + 1
 
-def readKmersFromFileToDict(kmerFile):
-    kmerDict = collections.defaultdict(int)
-    f = open(kmerFile, 'rU')
-    for km in f:
-        km = km.rstrip('\n')
-        kmerDict[km] = 1
-    f.close()
-    return kmerDict
-
-def createNaiveFromKmerDict(kd,k):
-    G,cs = dbg.all_contigs(kd,k)
-    G_naive = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False)
-    dbg.createGraphObject(G,cs,k,G_naive,pfn=False,ps=False)
-    return G_naive
-
-def createNaiveFromReads(fn,k,GraphObject):
-    d = dbg.build(fn,k,1)
-    G,cs = dbg.all_contigs(d,k)
-    dbg.createGraphObject(G,cs,k,GraphObject)
-
-def printKmerdictToFile(kd,outFile):
-    f = open(outFile, 'w')
-    for km in kd:
-        f.write(km+"\n")
-    f.close()
-
-def createKmerDictFromSegmentList(SL,k):
-    kd = collections.defaultdict(int)
-    for segment in SL:
-        for km in dbg.kmers(segment,k):
-            kd[km] += 1
-        for km in dbg.kmers(dbg.twin(segment),k):
-            kd[km] += 1
-    return kd
-
 
 
 #---------------------------------------------------------------------------
@@ -112,16 +273,16 @@ def createKmerDictFromSegmentList(SL,k):
 def returnTime(timeInSeconds):
     timeInSeconds = int(timeInSeconds)
     if timeInSeconds<60:
-        return "Time in seconds: "+str(timeInSeconds)+"\n"
+        return str(timeInSeconds)+" seconds"
     else:
         s = timeInSeconds%60
         m = timeInSeconds/60
         assert m*60+s==timeInSeconds
-        return str(m)+" minutes and "+str(s)+" seconds\n"
+        return str(m)+" minutes and "+str(s)+" seconds"
         
 #Prints the run times to a file in a format which can be copied 
 #directly into a latex tabular environment
-def printRuntimesToFile(genomeName, maxCovs, runTimes):
+def printRuntimesToFile(genomeName, maxAddCovs, runTimes):
     print "printRunTimesToFile()"
     #modify runTimes so it becomes a string with the format:
         #x min y sec    <--- if time>1 min
@@ -136,36 +297,54 @@ def printRuntimesToFile(genomeName, maxCovs, runTimes):
             else:
                 runTimeStrings[i] = str(rt) + " sec"
         return runTimeStrings
-
+    
+    #maxAddCovs = [5, 10, 15, 20, 30,float('inf')]
     runTimes = modRunTimes(runTimes)
     timeFile = "Output/runTimes_t.txt"
     if genomeName=="t":
         tf = open(timeFile, 'w')
-        for i in range(0,len(maxCovs)):
-            tf.write(str(maxCovs[i])+" & "+runTimes[i]+" & \\\\\n")
+        for i,maxAddCov in enumerate(maxAddCovs):
+            if maxAddCov == float('inf'):
+                tf.write("$\\\\infty$"+" & "+runTimes[i]+" & \\\\\n")
+            else:
+                tf.write(str(maxAddCovs[i])+" & "+runTimes[i]+" & \\\\\n")
         tf.close()
     elif genomeName=="sa":
         tf_old = open(timeFile, 'r')
         tf = open("Output/runTimes_tAndSA.txt", 'w')
-        i=0
-        for line in tf_old:
+        for i, line in enumerate(tf_old):
             line=line[0:-3]
-            lineCov = int(line.strip().split(" & ")[0])
-            if lineCov==maxCovs[i]:
+            lineCov = line.strip().split(" & ")[0]
+            if lineCov=="$\\infty$":
+                lineCov = float('inf')
+            elif lineCov=="$\\\\infty$":
+                print "We used the elif!!!!!!!!!!!!!!!!!!!!!!11"
+                lineCov = float('inf')
+            else:
+                print "lineCov:",lineCov
+                lineCov = int(lineCov)
+            if lineCov==maxAddCovs[i]:
                 tf.write(str(line)+runTimes[i]+" \\\\\n")
-            i+=1
-        for j in range(i-1,len(maxCovs)):
-            tf.write(str(maxCovs[j])+" & - & " + runTimes[i] + " \\\\\n")
     else:
         raise Exception("Illegal value for genomeName="+str(genomeName)+". It must be either t or sa")
 
 
 
 #----------------------------------------------------------------------------
-#--------Functions to create k-merdicts from genome and read files-----------
+#-------------Functions to work with raw genome and read files---------------
 #----------------------------------------------------------------------------
-#Creates a k-merdict from a .fa or .fasta file
+def segments(fn,k):
+    #yields segments from the reads, one segment at a time
+    for f in fn:
+        h = open(f, "rU")
+        for lineNr,line in enumerate(h):
+            if (lineNr%4 == 1):
+                segments = filter(lambda x: len(x)>=k and all([c in alphabet for c in x]),line.strip().split("N"))
+                for s in segments:
+                    yield s
+
 def createKmerDictFromGenomeFile(k,genomeFile):
+    #Creates a k-merdict from a .fa or .fasta file
     kmersInGenome = collections.defaultdict(int)
     h = open(genomeFile, "rU")
     genomeFileExtension = os.path.splitext(genomeFile)[1]
@@ -181,33 +360,74 @@ def createKmerDictFromGenomeFile(k,genomeFile):
         for line in h:
             line = line.strip()
             line = line if all([c in alphabet for c in line]) else ""
-            tl = dbg.twin(line)
             for km in dbg.kmers(line,k):
                 rep_km = min(km,dbg.twin(km))
                 kmersInGenome[rep_km] += 1
-    numKmersInGenome = len(kmersInGenome)
-    return kmersInGenome,numKmersInGenome
+    return kmersInGenome
 
-#Creates a k-merdict from two .fastq files
 def createKmerDictFromReadFiles(k,readFiles):
+    #Creates a k-merdict from two .fastq files
     kmersInReads = collections.defaultdict(int)
-    numReadsPerFile = 0
-    for f in readFiles:
-        h = open(f, "rU")
-        for lineNr,line in enumerate(h):
-            if (lineNr%4 == 1):
-                numReadsPerFile += 1
-                segments = filter(lambda x: len(x)>=k,line.strip().split("N"))
-                for s in segments:
-                    for km in dbg.kmers(s,k):
-                        rep_km = min(km,dbg.twin(km))
-                        kmersInReads[rep_km] += 1
-        h.close()
-    numReadsPerFile = numReadsPerFile/2
-    numKmersInReads = len(kmersInReads)
-    return kmersInReads,numKmersInReads,numReadsPerFile
+    for s in segments(readFiles,k):
+        for km in dbg.kmers(s,k):
+            rep_km = min(km,dbg.twin(km))
+            kmersInReads[rep_km] += 1
+    return kmersInReads
 
 
+#---------------------------------------------------------------------------
+#---------------------Functions to work with kmerDicts----------------------
+#---------------------------------------------------------------------------
+#Skilar öllum k-merum sem koma fyrir í kd1 en ekki í kd2 sem mengi
+#I.e. skilar mismengi kd1 og kd2
+def difference(kd1,kd2):
+    return { x : kd1[x] for x in set(kd1) - set(kd2) }
+
+def createNaiveFromKmerDict(kd,k):
+    G,cs = dbg.all_contigs(kd,k)
+    G_naive = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False)
+    dbg.createGraphObject(G,cs,k,G_naive,pfn=False,ps=False)
+    return G_naive
+
+def printKmerdictToFile(kd,outFile):
+    f = open(outFile, 'w')
+    for km in kd:
+        f.write(km+"\n")
+    f.close()
+
+
+def createKmerDictFromSegmentList(SL,k):
+    kd = collections.defaultdict(int)
+    for segment in SL:
+        for km in dbg.kmers(segment,k):
+            kd[km] += 1
+        for km in dbg.kmers(dbg.twin(segment),k):
+            kd[km] += 1
+    return kd
+
+
+def createDictOfNonSingletons(fn,k):
+    kmerDict_correct = collections.defaultdict(int)
+    for segment in segments(fn,k):
+        for km in dbg.kmers(segment,k):
+            kmerDict_correct[km] += 1
+        for km in dbg.kmers(dbg.twin(segment),k):
+            kmerDict_correct[km] += 1
+
+    #Throw all singletons:
+    kmerDict_correct = {k:v for k,v in kmerDict_correct.items() if v != 0}
+    return kmerDict_correct
+
+def dictEqualsOther(dict1,dict2):
+    if not len(dict1)==len(dict2):
+        return False
+    for km in dict1:
+        if not km in dict2:
+            return False
+    for km in dict2:
+        if not km in dict1:
+            raise Exception("this shouldn't happen")
+    return True
 
 #----------------------------------------------------------------------------
 #--------------------Functions to work with genome_info.csv------------------
@@ -302,13 +522,72 @@ def fractionFromGenomeInObject(kmersInGenome,numKmersInGenome,Object,isGraph=1):
     assert (fraction>=0) and (fraction<=1), "A fraction must be between 0 and 1"
     return fraction
 
-#Tekur lista af maxCovs (-1 fremst) og prentar mismengi af kd_-1 og kd_maxCov fyrir hvert maxCov
-def diff_GNoMaxCov_and_GMaxCov(maxCovs,outDirectory):
-    assert(maxCovs[0]==-1), "-1 must be first in the list"
-    kd1 = readKmersFromFileToDict(outDirectory+"/kmersFromG_maxCov_-1.txt")
-    for maxCov in maxCovs[1:]:
-        kd2 = readKmersFromFileToDict(outDirectory+"/kmersFromG_maxCov_"+str(maxCov)+".txt")
-        printKmerdictToFile(difference(kd1,kd2),outDirectory+"/diff_GNoMaxCov_and_GMaxCov_"+str(maxCov)+".txt")
+def printCovDictToFile(covDict,fileName):
+    f = open(fileName, 'w')
+    for maxAddCov, values in covDict.iteritems():
+        #values = [COV, G_len,G_frac,BF_len,BF_frac] fyrir G (maxAddCov = float('inf'))
+        #values = [COV, G_len,G_frac] fyrir sérhvert Gx
+        if maxAddCov == float('inf'):
+            assert(len(values)==5)
+            #[COV, G_len, G_frac, BF_len, BF_frac] = values
+            f.write(str(maxAddCov)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+";"+str(values[3])+";"+str(values[4])+"\n")
+        else:
+            assert(len(values)==3)
+            f.write(str(maxAddCov)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+"\n")
+    f.close()
+
+def readCovDictFromFile(fileName):
+    f = open(fileName, 'rU')
+    covDict = collections.defaultdict(list)
+    for line in f:
+        line = line.rstrip('\n').split(";")
+        maxAddCov = float(line[0])
+        if maxAddCov!=float('inf'):
+            maxAddCov = int(maxAddCov)
+        covDict[maxAddCov] = [[]]*(len(line)-1)
+        for j in range(0,len(line)-1):
+            covDict[maxAddCov][j] = eval(line[j+1])
+    f.close()
+    return covDict
+
+'''
+#Tekur lista af maxAddCovs (-1 fremst) og prentar mismengi af kd_-1 og kd_maxAddCov fyrir hvert maxAddCov
+def diff_GNoMaxCov_and_GMaxCov(maxAddCovs,outDirectory):
+    assert(maxAddCovs[0]==-1), "-1 must be first in the list"
+    kd1 = readKmersFromFileToDict(outDirectory+"/kmersFromG_maxAddCov_-1.txt")
+    for maxAddCov in maxAddCovs[1:]:
+        kd2 = readKmersFromFileToDict(outDirectory+"/kmersFromG_maxAddCov_"+str(maxAddCov)+".txt")
+        printKmerdictToFile(difference(kd1,kd2),outDirectory+"/diff_GNoMaxCov_and_GMaxCov_"+str(maxAddCov)+".txt")
+'''
+
+def readSkipPrint(L):
+    assert(len(sys.argv)<=L), "L is either the length of sys.argv or the index of it's last value"
+    if len(sys.argv)==L:
+        if sys.argv[L-1]=="False":
+            skipPrint = False
+        elif sys.argv[L-1]=="True":
+            skipPrint = True
+        else:
+            assert(False), "Illegal value for skipPrint"
+    else:
+        skipPrint = False
+    return skipPrint
+
+def readKmersFromFileToDict(kmerFile):
+    kmerDict = collections.defaultdict(int)
+    f = open(kmerFile, 'rU')
+    for km in f:
+        km = km.rstrip('\n')
+        kmerDict[km] = 1
+    f.close()
+    return kmerDict
+
+def createNaiveFromReads(fn,k,GraphObject):
+    d = dbg.build(fn,k,1)
+    G,cs = dbg.all_contigs(d,k)
+    dbg.createGraphObject(G,cs,k,GraphObject)
+
+
 
 if __name__ == "__main__":
     #kmersInGenome = readKmersFromFileToDict("Output/t/kmers_genome.txt")

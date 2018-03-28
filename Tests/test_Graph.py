@@ -1,15 +1,44 @@
 #coding:utf8
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 import Graph
 from compareGraphs import *
 import BF_counter
 import helpers
 import Bloom
+import Path
 
+def myHelper(k=5):
+    G = Graph.Graph(k)
+    G_correct = Graph.Graph(k)
+    return k, G, G_correct
 
 #--------------------------------------------------------------------------
 #-----------------Simple functions for working with graphs-----------------
 #--------------------------------------------------------------------------
+class Test_contains(unittest.TestCase):
+    def test_1(self):
+        k = 5
+        G = Graph.Graph(k)
+        G.contigs[G.getID()] = ["AAAAA",[],[],2]
+        G.addKmersFromAllContigs()
+        self.assertTrue("AAAAA" in G)
+        self.assertTrue("TTTTT" in G)
+        self.assertFalse("AAAAT" in G)
+
+    def test_2(self):
+        k = 5
+        G = Graph.Graph(k)
+        s = "AAAAACGTTT"
+        for km in dbg.kmers(s,k):
+            G.contigs[G.getID()] = [km,[],[],2]
+        G.addKmersFromAllContigs()
+        for km in dbg.kmers(s,k):
+            self.assertTrue(km in G)
+            self.assertTrue(dbg.twin(km) in G)
+        self.assertFalse("AAAAT" in G)
+
 class Test_setINandOUT(unittest.TestCase):
     #def setOUT(self,ID,OUT):
     def allIsEqual(self,G1,G2):
@@ -49,34 +78,164 @@ class Test_setINandOUT(unittest.TestCase):
         G_correct.contigs[G_correct.getID()] = ["TTC", [(0,True)], [], 0]
         self.allIsEqual(G1,G_correct)
 
+class Test_COV(unittest.TestCase):
+    def helper(self,G,correct_C_COV,correct_km_COV):
+        G.addKmersFromAllContigs()
+        C_COV = G.getAverageKmerCoverageOfContig(0)
+        km_COV = G.getCoverageOfKmer("AAAAA")
+        self.assertTrue(C_COV==correct_C_COV)
+        self.assertTrue(km_COV==correct_km_COV)
 
-class Test_increaseCOV_by(unittest.TestCase):
-    def allIsEqual(self,G1,G2):
-        for index in G1.contigs:
-            [c1,IN1,OUT1,COV1] = G1.contigs[index]
-            [c2,IN2,OUT2,COV2] = G2.contigs[index]
+    def assert_C_Cov_equals_trueCov(self,G,cID,trueCOV):
+        C_COV = G.getAverageKmerCoverageOfContig(cID)
+        self.assertTrue(C_COV==trueCOV)
 
-            self.assertEqual(c1,c2)
-            self.assertEqual(sorted(IN1),sorted(IN2))
-            self.assertEqual(sorted(OUT1),sorted(OUT2))
-            self.assertEqual(COV1,COV2)
+    def assert_km_cov_equals_true_km_cov(self,G,km,trueCOV):
+        km_COV = G.getCoverageOfKmer(km)
+        self.assertTrue(km_COV==trueCOV)
 
-        G1.addKmersFromAllContigs()
-        G2.addKmersFromAllContigs()
+    #Check that getAverageKmerCoverageOfContig, and
+    #getCoverageOfKmer return the right values for a
+    #value of COV which we added manually
+    def test_m1(self):
+        G = Graph.Graph(5)
+        G.contigs[G.getID()] = ["AAAAA",[(0,True)],[(0,True)],1]
+        self.helper(G,1,1)
 
-        self.assertTrue(isSameGraph(G1,G2))
+    def test_m2(self):
+        G = Graph.Graph(5)
+        G.contigs[G.getID()] = ["AAAAA",[(0,True)],[(0,True)],5]
+        self.helper(G,5,5)
 
-    def test_1(self):
-        G1 = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G1.contigs[G1.getID()] = ["AAA",[(0,True)],[(0,True)],0]
-        G1.increaseCOV_by(0,2)
-        G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True)],2]
-        self.allIsEqual(G1,G_correct)
-        self.assertTrue(isSameGraph(G1,G_correct))
-        G1.increaseCOV_by(0,12)
-        G_correct.contigs[0] = ["AAA",[(0,True)],[(0,True)],14]
-        self.allIsEqual(G1,G_correct)
+    #Check whether addSegmentToGraph assigns the right COV value
+    #to our contigs
+    def test_a1(self):
+        G = Graph.Graph(5)
+        G.addSegmentToGraph("AAAAA")
+        self.helper(G,2,2)
+
+    def test_a2(self):
+        G = Graph.Graph(5)
+        G.addSegmentToGraph("AAAAA")
+        G.addSegmentToGraph("AAAAA")
+        self.helper(G,3,3)
+
+    #Test splitting a contig
+    def test_s1(self):
+        G = Graph.Graph(5)
+        G.addSegmentToGraph("AACCGA")
+        G.addKmersFromAllContigs()
+        C_COV = G.getAverageKmerCoverageOfContig(0)
+        km_COV1 = G.getCoverageOfKmer("AACCG")
+        km_COV2 = G.getCoverageOfKmer("ACCGA")
+        self.assertTrue(C_COV==2)
+        self.assertTrue(km_COV1==2)
+        self.assertTrue(km_COV2==2)
+
+    #Test splitting a contig
+    def test_s2(self):
+        G = Graph.Graph(5)
+        G.addSegmentToGraph("AACCGA")
+        G.addKmersFromAllContigs()
+        C_COV = G.getAverageKmerCoverageOfContig(0)
+        km_COV1 = G.getCoverageOfKmer("AACCG")
+        km_COV2 = G.getCoverageOfKmer("ACCGA")
+        self.assertTrue(C_COV==2)
+        self.assertTrue(km_COV1==2)
+        self.assertTrue(km_COV2==2)
+        G.splitContig(0,5)
+        self.assert_C_Cov_equals_trueCov(G,cID=1,trueCOV=2)
+        self.assert_C_Cov_equals_trueCov(G,cID=2,trueCOV=2)
+
+    def test_s3(self):
+        G = Graph.Graph(5)
+        G.contigs[G.getID()] = ["AACCGA",[],[],2]
+        G.addKmersFromAllContigs()
+        G.splitContig(0,5)
+        self.assert_C_Cov_equals_trueCov(G,cID=1,trueCOV=1)
+        self.assert_C_Cov_equals_trueCov(G,cID=2,trueCOV=1)
+
+    def test_s4(self):
+        G = Graph.Graph(5)
+        G.contigs[G.getID()] = ["AACCGA",[],[],10]
+        G.addKmersFromAllContigs()
+        G.splitContig(0,5)
+        self.assert_C_Cov_equals_trueCov(G,cID=1,trueCOV=5)
+        self.assert_C_Cov_equals_trueCov(G,cID=2,trueCOV=5)
+
+    def test_s5(self):
+        G = Graph.Graph(5)
+        G.contigs[G.getID()] = ["AACCGA",[],[],9]
+        G.addKmersFromAllContigs()
+        G.splitContig(0,5)
+        self.assert_C_Cov_equals_trueCov(G,cID=1,trueCOV=5)
+        self.assert_C_Cov_equals_trueCov(G,cID=2,trueCOV=4)
+
+    def test_s6(self):
+        G = Graph.Graph(5)
+        G.addSegmentToGraph("AACCGAC")
+        G.addKmersFromAllContigs()
+        C_COV = G.getAverageKmerCoverageOfContig(0)
+        km_COV1 = G.getCoverageOfKmer("AACCG")
+        km_COV2 = G.getCoverageOfKmer("ACCGA")
+        km_COV3 = G.getCoverageOfKmer("CCGAC")
+        self.assertTrue(C_COV==2)
+        self.assertTrue(km_COV1==2)
+        self.assertTrue(km_COV2==2)
+        self.assertTrue(km_COV3==2)
+        G.splitContig(0,5)
+        self.assert_C_Cov_equals_trueCov(G,cID=1,trueCOV=2)
+        self.assert_C_Cov_equals_trueCov(G,cID=2,trueCOV=2)
+
+    def test_s7(self):
+        G = Graph.Graph(5)
+        G.addSegmentToGraph("AACCGAC")
+        G.addKmersFromAllContigs()
+        C_COV = G.getAverageKmerCoverageOfContig(0)
+        km_COV1 = G.getCoverageOfKmer("AACCG")
+        km_COV2 = G.getCoverageOfKmer("ACCGA")
+        km_COV3 = G.getCoverageOfKmer("CCGAC")
+        self.assertTrue(C_COV==2)
+        self.assertTrue(km_COV1==2)
+        self.assertTrue(km_COV2==2)
+        self.assertTrue(km_COV3==2)
+        G.splitContig(0,6)
+        self.assert_C_Cov_equals_trueCov(G,cID=1,trueCOV=2)
+        self.assert_C_Cov_equals_trueCov(G,cID=2,trueCOV=2)
+
+    def test_f1(self):
+        G = Graph.Graph(5)
+        G.addSegmentToGraph("AACCGAC")
+        G.addKmersFromAllContigs()
+        C_COV = G.getAverageKmerCoverageOfContig(0)
+        self.assert_C_Cov_equals_trueCov(G,0,2)
+        self.assert_km_cov_equals_true_km_cov(G,"AACCG",2)
+        self.assert_km_cov_equals_true_km_cov(G,"ACCGA",2)
+        self.assert_km_cov_equals_true_km_cov(G,"CCGAC",2)
+        G.flipContig(0)
+        self.assert_C_Cov_equals_trueCov(G,0,2)
+        self.assert_km_cov_equals_true_km_cov(G,"AACCG",2)
+        self.assert_km_cov_equals_true_km_cov(G,"ACCGA",2)
+        self.assert_km_cov_equals_true_km_cov(G,"CCGAC",2)
+
+    def test_c1(self):
+        G = Graph.Graph(5)
+        G.contigs[G.getID()] = ["AACCG",[],[],1]
+        G.contigs[G.getID()] = ["ACCGA",[],[],1]
+        G.addKmersFromAllContigs()
+        G.connectSegment(0)
+        self.assert_km_cov_equals_true_km_cov(G,"AACCG",1)
+        self.assert_km_cov_equals_true_km_cov(G,"ACCGA",1)
+
+    def test_m3(self):
+        G = Graph.Graph(5)
+        G.contigs[G.getID()] = ["AACCG",[],[(1,True)],1]
+        G.contigs[G.getID()] = ["ACCGA",[(0,True)],[],1]
+        G.addKmersFromAllContigs()
+        G.connectSegment(0)
+        G.mergeSegment(0)
+        self.assert_km_cov_equals_true_km_cov(G,"AACCG",1)
+        self.assert_km_cov_equals_true_km_cov(G,"ACCGA",1)
 
 class Test_addINandOUT(unittest.TestCase):
     def allIsEqual(self,G1,G2,skipNaive=False):
@@ -131,44 +290,6 @@ class Test_addINandOUT(unittest.TestCase):
         G_correct.contigs[G_correct.getID()] = ["AAC",[(0,True)],[],0]
         self.allIsEqual(G1,G_correct)
 
-"""
-class Test_deleteINandOUT(unittest.TestCase):
-    def allIsEqual(self,G1,G2):
-        for index in G1.contigs:
-            [c1,IN1,OUT1,COV1] = G1.contigs[index]
-            [c2,IN2,OUT2,COV2] = G2.contigs[index]
-
-            self.assertEqual(c1,c2)
-            self.assertEqual(sorted(IN1),sorted(IN2))
-            self.assertEqual(sorted(OUT1),sorted(OUT2))
-            self.assertEqual(COV1,COV2)
-
-    def test_1(self):
-        #1 contig with connections to self
-        G1 = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G1.contigs[G1.getID()] = ["AAA",[],[],0]
-        G1.addIN(0,(0,True))
-        G1.addOUT(0,(0,True))
-        G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True)],0]
-        self.allIsEqual(G1,G_correct)
-        G1.addKmersFromAllContigs()
-        G_correct.addKmersFromAllContigs()
-        self.assertTrue(isSameGraph(G1,G_correct))
-        G1.deleteIN(0,(0,True))
-        G_correct.contigs[0] = ["AAA",[],[(0,True)],0]
-        self.allIsEqual(G1,G_correct)
-        #self.assertTrue(isSameGraph(G1,G_correct))   get ekki notað isSameGraph hér af því
-        #                                             að í þessu milliástandi eru G1 og G_correct
-        #                                             ekki lögleg DBG
-        G1.deleteOUT(0,(0,True))
-        G_correct.contigs[0] = ["AAA",[],[],0]
-        self.allIsEqual(G1,G_correct)
-        G1.addKmersFromAllContigs()
-        G_correct.addKmersFromAllContigs()
-        self.assertTrue(isSameGraph(G1,G_correct,alsoCompareWithNaive=False))
-"""
-
 class Test_kmerFunctions(unittest.TestCase):
     def test_1(self):
         #1 contig with connections to self
@@ -222,7 +343,6 @@ class Test_isEmpty(unittest.TestCase):
         G1.contigs[0] = ["AAACCC",[],[],0]
         self.assertFalse(G1.isEmpty())
 
-
 class Test_isLegal(unittest.TestCase):
     def test_1(self):
         G = Graph.Graph(3)
@@ -239,7 +359,7 @@ class Test_isLegal(unittest.TestCase):
         self.assertFalse(G.isLegalDBG())
 
     def test_3(self):
-        G = Graph.Graph(k=3,pil=True)
+        G = Graph.Graph(k=3,pil=False)
         G.contigs[G.getID()] = ["CAG",[],[(1,True)],0]
         G.contigs[G.getID()] = ["AGT",[],[],0]
         G.addKmersFromAllContigs()
@@ -274,7 +394,6 @@ class Test_isLegal(unittest.TestCase):
         G2.addKmersFromAllContigs()
         self.assertFalse(G1.isLegalDBG())
         self.assertTrue(G2.isLegalDBG())
-
 
 class Test_isLegal_connectionsToSelf(unittest.TestCase):
     def test_1(self):
@@ -328,7 +447,6 @@ class Test_isLegal_connectionsToSelf(unittest.TestCase):
         G1.contigs[0] = ["AAA",[],[(0,True)],0]
         self.assertFalse(G1.isLegal_connectionsToSelf())
 
-#def connect_a_to_b(self,aID,bID,A,B):
 class Test_connect_a_to_b(unittest.TestCase):
     #a->b
     def test_1(self):
@@ -347,10 +465,7 @@ class Test_connect_a_to_b(unittest.TestCase):
         G.connect_a_to_b(0,1,True,True)
         self.assertEqual(G.contigs[0][2],[(1,True)])
         self.assertEqual(G.contigs[1][1],[(0,True)])
-
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
 
     #a->a
     def test_2(self):
@@ -408,8 +523,6 @@ class Test_connect_a_to_b(unittest.TestCase):
         G.addKmersFromAllContigs()
         G_correct.addKmersFromAllContigs()
         G.connect_a_to_b(0,1,False,True)
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertEqual(G.contigs[0][1] , [(1,False)])
         self.assertEqual(G.contigs[1][1] , [(0,False)])
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
@@ -458,10 +571,8 @@ class Test_connect_a_to_b(unittest.TestCase):
         self.assertEqual(G.contigs[0][1],[(0,True)])
         self.assertTrue(isSameGraph(G,G_correct))  
 
-
-
-#má ekki nota isSameGraph af því að changeID_FromTo er hluti af því!
 class Test_changeID_FromTo(unittest.TestCase):
+    #má ekki nota isSameGraph af því að changeID_FromTo er hluti af því!
     def allIsEqual(self,G1,G2):
         for index in G1.contigs:
             [c1,IN1,OUT1,COV1] = G1.contigs[index]
@@ -582,8 +693,6 @@ class Test_changeID_FromTo(unittest.TestCase):
         G.addKmersFromAllContigs()
 
         G_naive = G.createNaive()
-        G.printContigs("G")
-        G_naive.printContigs("G_naive")
 
         self.allIsEqual(G,G_naive)
         self.assertTrue(isSameGraph(G,G_naive))
@@ -595,8 +704,6 @@ class Test_changeID_FromTo(unittest.TestCase):
         G.addKmersFromAllContigs()
         
         G_naive = G.createNaive()
-        G.printContigs("G")
-        G_naive.printContigs("G_naive")
 
         self.assertTrue(isSameGraph(G,G_naive,alsoCompareWithNaive=False))
 
@@ -609,8 +716,6 @@ class Test_changeID_FromTo(unittest.TestCase):
         G_correct.contigs[1] = ["ATT",[(1,False),(1,False)],[],0]
         G_correct.setID(2)
         G_correct.addKmersFromAllContigs()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.allIsEqual(G,G_correct)
 
     def test_11(self):
@@ -622,8 +727,6 @@ class Test_changeID_FromTo(unittest.TestCase):
         G_correct.contigs[1] = ["ATCAT",[(1,True),(1,False),(1,False)],[(1,True),(1,False),(1,False)],0]
         G_correct.setID(2)
         G_correct.addKmersFromAllContigs()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.allIsEqual(G,G_correct)
 
     def test_12(self):
@@ -640,7 +743,7 @@ class Test_changeID_FromTo(unittest.TestCase):
         G.changeID_FromTo(1,3)
         self.allIsEqual(G,G_correct)
 
-    def test_12(self):
+    def test_13(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
         G.contigs[G.getID()] = ["TTT",[(0,True),(1,True)],[(0,True),(1,True)],0]
@@ -649,23 +752,20 @@ class Test_changeID_FromTo(unittest.TestCase):
         G_correct.contigs[2] = ["TTCTT",[(0,True),(2,True)],[(0,True),(2,True)],0]
         G_correct.setID(2)
         G.changeID_FromTo(1,2)
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
-
 
 class Test_flipContig(unittest.TestCase):
     #Note: We can't use compareGraphs to test this function because we use 
     #flipContig as a part of fixTwins in compareGraphs.
     #we therefore need to manually verify the correctness of the tests 
     def printFlipPrint(self,G,cID,text):
-        print "-----------" + text + "-----------"
-        print "Before:"
+        #print "-----------" + text + "-----------"
+        #print "Before:"
         G.addKmersFromAllContigs()
-        G.printContigs()
+        #G.printContigs()
         G.flipContig(cID)
-        print "\nAfter:"
-        G.printContigs()
-        print "\n\n"
+        #print "\nAfter:"
+        #G.printContigs()
+        #print "\n\n"
         self.assertTrue(G.isLegalDBG())
 
     def test_1(self):
@@ -676,7 +776,6 @@ class Test_flipContig(unittest.TestCase):
 
         #Test for correctness:
         [c,IN,OUT,COV] = G1.contigs[0]
-        G1.printContigs("G1")
         self.assertEqual(c,"TTT")
         self.assertEqual(IN,[(0,True)])
         self.assertEqual(OUT,[(0,True)])
@@ -788,7 +887,6 @@ class Test_flipContig(unittest.TestCase):
         self.assertEqual(OUT1,[(0,True)])
         self.assertEqual(IN2,[])
         self.assertEqual(OUT2,[(0,True)])
-        G1.printContigs("G1")
 
     def test_7(self):
         #just like test 4 but with different second contig (prep for test 8)
@@ -934,19 +1032,16 @@ class Test_flipContig(unittest.TestCase):
         G_correct = Graph.Graph(3)
         G.contigs[G.getID()] = ["CGTA",[(0,False),(0,False)],[(0,False),(0,False)],0]
         G_correct.contigs[G_correct.getID()] = ["TACG",[(0,False),(0,False)],[(0,False),(0,False)],0]
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.printFlipPrint(G,0,"Test 11")
         self.allIsEqual(G,G_correct,0)
         G.addKmersFromAllContigs()
         self.assertTrue(G.isLegalDBG())
 
-
-
 #--------------------------------------------------------------------------
 #--------------------addSegmentToGraph and subfunctions--------------------
 #--------------------------------------------------------------------------
-class Test_addSegmentToGraph(unittest.TestCase):
+"""
+class Test_addSegmentToGraph_OLD(unittest.TestCase):
     #Afrit af testunum úr addSegmentWithNoSeenKmers nema bara breytt í kall á addSegmentToGraph
     def test_1(self):
         G = Graph.Graph(3)
@@ -969,9 +1064,9 @@ class Test_addSegmentToGraph(unittest.TestCase):
         #create G and G_correct:
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        G.contigs[G.getID()] = ["ACCA",[],[],10]
         #twin:TGGT
-        G.contigs[G.getID()] = ["TTT",[(1,True)],[(1,True)],0]
+        G.contigs[G.getID()] = ["TTT",[(1,True)],[(1,True)],10]
 
         G_correct = Graph.Graph(3)
         G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
@@ -988,23 +1083,21 @@ class Test_addSegmentToGraph(unittest.TestCase):
 
     def test_3(self):
         #create G and G_correct:
-        G = Graph.Graph(3,pfn=True,ps=False)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        G = Graph.Graph(3)
+        G.contigs[G.getID()] = ["ACCA",[],[],10]
         #twin:TGGT
-        G.contigs[G.getID()] = ["TTT",[(1,True),(2,True)],[(1,True),(2,True)],0]
-        G.contigs[G.getID()] = ["TTCTT",[(1,True),(2,True)],[(1,True),(2,True)],0]
+        G.contigs[G.getID()] = ["TTT",[(1,True),(2,True)],[(1,True),(2,True)],10]
+        G.contigs[G.getID()] = ["TTCTT",[(1,True),(2,True)],[(1,True),(2,True)],10]
 
         G.addKmersFromAllContigs()
         G.addSegmentToGraph("TCC")
         G_naive = G.createNaive()
-        G.printContigs("G")
-        G_naive.printContigs("G_naive")
         self.assertTrue(isSameGraph(G,G_naive,alsoCompareWithNaive=False))
 
     def test_4(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0] #twin:TGGT
+        G.contigs[G.getID()] = ["ACCA",[],[],10] #twin:TGGT
         G.addKmersFromAllContigs()
 
         G.addSegmentToGraph("TCCT") #twin:AGGA
@@ -1056,8 +1149,8 @@ class Test_addSegmentToGraph(unittest.TestCase):
     def test_7(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0] #twin:TGGT
-        G.contigs[G.getID()] = ["TCTA",[],[(1,False),(1,False)],0] #twin:TAGA
+        G.contigs[G.getID()] = ["ACCA",[],[],10] #twin:TGGT
+        G.contigs[G.getID()] = ["TCTA",[],[(1,False),(1,False)],10] #twin:TAGA
         G.addKmersFromAllContigs()
 
         G.addSegmentToGraph("CTC") #twin:GAG
@@ -1137,7 +1230,7 @@ class Test_addSegmentToGraph(unittest.TestCase):
         G_correct = Graph.Graph(3)
         G.addSegmentToGraph("AAACAAA")
         G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True),(1,True)],[(0,True),(1,True)],2]
-        G_correct.contigs[G_correct.getID()] = ["AACAA",[(0,True),(1,True)],[(0,True),(1,True)],0]
+        G_correct.contigs[G_correct.getID()] = ["AACAA",[(0,True),(1,True)],[(0,True),(1,True)],6]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct))
 
@@ -1145,19 +1238,17 @@ class Test_addSegmentToGraph(unittest.TestCase):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
         G.addSegmentToGraph("AAACTTT")
-        G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True),(1,True),(1,False)],0]
-        G_correct.contigs[G_correct.getID()] = ["AACTT",[(0,True)],[(0,False)],0]
+        G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True),(1,True),(1,False)],2]
+        G_correct.contigs[G_correct.getID()] = ["AACTT",[(0,True)],[(0,False)],6]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct))
 
     def test_16(self):
-        G = Graph.Graph(3,pfn=True,ps=False,al=False,pil=False)
+        G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
         G.addSegmentToGraph("AAAAAAAAA")
-        G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True)],7]
+        G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True)],8]
         G_correct.addKmersFromAllContigs()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct))
 
     #Flókinn contig sem ætti ekki að splittast
@@ -1185,24 +1276,18 @@ class Test_addSegmentToGraph(unittest.TestCase):
         G_correct.contigs[1] = ["ATA",[(3,True),(1,False),(1,False)],[(3,True),(1,False),(1,False)],0] #twin: GGAT
         G_correct.addKmersFromAllContigs()
         G_correct.setID(4)
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct))
 
     def test_20(self):
         G = Graph.Graph(3)
         G.addSegmentToGraph("AAATCCC")
         G_naive = G.createNaive()
-        G.printContigs("G")
-        G_naive.printContigs("G_naive")
         self.assertTrue(G.equalsNaive())
 
     def test_21(self):
         G = Graph.Graph(3)
         G.addSegmentToGraph("AAATCCCA")
         G_naive = G.createNaive()
-        G.printContigs("G")
-        G_naive.printContigs("G_naive")
         self.assertTrue(G.equalsNaive())
 
     def test_22(self):
@@ -1213,8 +1298,6 @@ class Test_addSegmentToGraph(unittest.TestCase):
         G.addSegmentToGraph("AAA")
         G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True)],7]
         G_correct.addKmersFromAllContigs()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=True,pfn=False,ps=False,relaxAssertions=False))
 
     def test_23(self):
@@ -1223,8 +1306,6 @@ class Test_addSegmentToGraph(unittest.TestCase):
         G.addSegmentToGraph("AAAA")
         G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True)],7]
         G_correct.addKmersFromAllContigs()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=True,pfn=False,ps=False,relaxAssertions=False))
 
     def test_24(self):
@@ -1233,246 +1314,107 @@ class Test_addSegmentToGraph(unittest.TestCase):
         G.addSegmentToGraph("AAAAA")
         G_correct.contigs[G_correct.getID()] = ["AAA",[(0,True)],[(0,True)],7]
         G_correct.addKmersFromAllContigs()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=True,pfn=False,ps=False,relaxAssertions=False))
-
-
-"""
-class Test_removeHalfAddedKmers(unittest.TestCase):
-    def test_1(self):
-        G = Graph.Graph(3)
-        #self.kmers[km] = [ID,i,False]
-        G.kmers["AAA"]= [G.halfAdded,None,None]
-        G.kmers["TTT"]= [G.halfAdded,None,None]
-        G.removeHalfAddedKmers("AAA")
-        self.assertTrue(G.hasNoKmers())
-
-    def test_2(self):
-        G = Graph.Graph(3)
-        G.kmers["AAA"] = [G.halfAdded,None,None]
-        G.kmers["TTT"] = [G.halfAdded,None,None]
-        G.kmers["AAT"] = [G.halfAdded,None,None]
-        G.kmers["ATT"] = [G.halfAdded,None,None]
-        G.removeHalfAddedKmers("AAAT")
-        self.assertTrue(G.hasNoKmers())
 """
 
-
-class Test_addSegmentWithNoSeenKmers(unittest.TestCase):
+class Test_addSegmentToGraph(unittest.TestCase):
     def test_1(self):
-        G = Graph.Graph(3,pfn=True,ps=True)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0] #twin:TGGT
-        G.addKmersFromAllContigs()
-
-        G.addSegmentWithNoSeenKmers("TCC")
-
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
-        G_correct.contigs[2] = ["CCA",[(1,True),(3,True)],[],0]
-        G_correct.contigs[3] = ["TCC",[],[(2,True)],0]
-        G_correct.setID(4)
-        G_correct.addKmersFromAllContigs()
-        self.assertTrue(isSameGraph(G,G_correct))
+        k, G, Gc = myHelper(5)
+        G.addSegmentToGraph("AAAAA")
+        Gc.contigs[Gc.getID()] = ["AAAAA",[(0,True)],[(0,True)],2]
+        Gc.addKmersFromAllContigs()
+        self.assertTrue(isSameGraph(G,Gc))
 
     def test_2(self):
-        #create G and G_correct:
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
-        #twin:TGGT
-        G.contigs[G.getID()] = ["TTT",[(1,True)],[(1,True)],0]
-
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
-        G_correct.contigs[2] = ["CCA",[(1,True),(3,True)],[],0]
-        G_correct.contigs[3] = ["TCC",[],[(2,True)],0]
-        G_correct.contigs[4] = ["TTT",[(4,True)],[(4,True)],0]
-        G_correct.setID(5)
-        
-        G.addKmersFromAllContigs()
-        G_correct.addKmersFromAllContigs()
-
-        G.addSegmentWithNoSeenKmers("TCC")
-
-        self.assertTrue(isSameGraph(G,G_correct))
+        k, G, Gc = myHelper(5)
+        G.addSegmentToGraph("AAAAA")
+        G.addSegmentToGraph("CCCCC")
+        Gc.contigs[Gc.getID()] = ["AAAAA",[(0,True)],[(0,True)],2]
+        Gc.contigs[Gc.getID()] = ["CCCCC",[(1,True)],[(1,True)],2]
+        Gc.addKmersFromAllContigs()
+        self.assertTrue(isSameGraph(G,Gc))
 
     def test_3(self):
-        #create G and G_correct:
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
-        #twin:TGGT
-        G.contigs[G.getID()] = ["TTT",[(1,True),(2,True)],[(1,True),(2,True)],0]
-        G.contigs[G.getID()] = ["TTATT",[(1,True),(2,True)],[(1,True),(2,True)],0]
-        G.addKmersFromAllContigs()
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
-        G_correct.contigs[2] = ["CCA",[(1,True),(3,True)],[],0]
-        G_correct.contigs[3] = ["TCC",[],[(2,True)],0]
-        G_correct.contigs[4] = ["TTT",[(4,True),(5,True)],[(4,True),(5,True)],0]
-        G_correct.contigs[5] = ["TTATT",[(4,True),(5,True)],[(4,True),(5,True)],0]
-        G_correct.setID(6)
-        G_correct.addKmersFromAllContigs()
-
-        G.addSegmentWithNoSeenKmers("TCC")
-
-        self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False))
+        k, G, Gc = myHelper(5)
+        G.addSegmentToGraph("AAAAA")
+        G.addSegmentToGraph("CCCCC")
+        G.addSegmentToGraph("AAAAA")
+        Gc.contigs[Gc.getID()] = ["AAAAA",[(0,True)],[(0,True)],3]
+        Gc.contigs[Gc.getID()] = ["CCCCC",[(1,True)],[(1,True)],2]
+        Gc.addKmersFromAllContigs()
+        self.assertTrue(isSameGraph(G,Gc))
 
     def test_4(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0] #twin:TGGT
-        G.addKmersFromAllContigs()
-        G.addSegmentWithNoSeenKmers("TCCT") #twin:AGGA
+        k, G, Gc = myHelper(5)
+        G.addSegmentToGraph("AAAAA")
+        G.addSegmentToGraph("CCCCC")
+        G.addSegmentToGraph("AAAAACC")
+        Gc.contigs[Gc.getID()] = ["AAAAA",[(0,True)],[(0,True),(2,True)],3]
+        Gc.contigs[Gc.getID()] = ["CCCCC",[(1,True)],[(1,True)],2]
+        Gc.contigs[Gc.getID()] = ["AAAACC",[(0,True)],[],2]
+        Gc.addKmersFromAllContigs()
+        self.assertTrue(isSameGraph(G,Gc))
 
-        #ACC   ->   CCA
-        #TCC   ->   CCT
-
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["ACC",[],[(2,True),(4,True)],0]
-        G_correct.contigs[2] = ["CCA",[(1,True),(3,True)],[],0]
-        G_correct.contigs[3] = ["TCC",[],[(2,True),(4,True)],0]
-        G_correct.contigs[4] = ["CCT",[(1,True),(3,True)],[],0]
-        G_correct.addKmersFromAllContigs()
-        G_correct.setID(5)
-        self.assertTrue(isSameGraph(G,G_correct))
-
-    def test_5(self,pfn=True,ps=True):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0] #twin:TGGT
-        G.addKmersFromAllContigs()
-
-        G.addSegmentWithNoSeenKmers("TCTC") #twin:GAGA
-
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[G_correct.getID()] = ["ACCA",[],[],0]
-        G_correct.contigs[G_correct.getID()] = ["TCTC",[(1,True)],[(1,True)],0]
-        G_correct.addKmersFromAllContigs()
-        self.assertTrue(isSameGraph(G,G_correct))
-
-    def test_5b(self):
-        G = Graph.Graph(3,pfn=True,ps=True)
-        G_correct = Graph.Graph(3)
-        G.addSegmentWithNoSeenKmers("TCTC") #twin:GAGA
-
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[G_correct.getID()] = ["TCTC",[(0,True)],[(0,True)],0]
-        G_correct.addKmersFromAllContigs()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
-        self.assertTrue(isSameGraph(G,G_correct))
-
-    def test_6(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0] #twin:TGGT
-        G.contigs[G.getID()] = ["CTA",[],[(1,False),(1,False)],0] #twin:TAG
-        G.addKmersFromAllContigs()
-
-        G.addSegmentWithNoSeenKmers("TCTC") #twin:GAGA
-
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[G_correct.getID()] = ["ACCA",[],[],0]
-        G_correct.contigs[G_correct.getID()] = ["CTA",[(2,True)],[(1,False),(1,False)],0]#twin:TAG
-        G_correct.contigs[G_correct.getID()] = ["CTCT",[(2,True)],[(1,True),(2,True)],0]
-        G_correct.addKmersFromAllContigs()
-        self.assertTrue(isSameGraph(G,G_correct))
-
-    #Þetta test er til að einfalda test_6 niður í seinni helming keyrslunnar
-    #test_6 var flóknara en ég bjóst við
-    def test_7(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0] #twin:TGGT
-        G.contigs[G.getID()] = ["TCTA",[],[(1,False),(1,False)],0] #twin:TAGA
-        G.addKmersFromAllContigs()
-
-        G.addSegmentWithNoSeenKmers("CTC") #twin:GAG
-
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[G_correct.getID()] = ["ACCA",[],[],0]
-        G_correct.contigs[G_correct.getID()] = ["CTA",[(2,True)],[(1,False),(1,False)],0]#twin:TAG
-        G_correct.contigs[G_correct.getID()] = ["CTCT",[(2,True)],[(1,True),(2,True)],0]
-        G_correct.addKmersFromAllContigs()
-        self.assertTrue(isSameGraph(G,G_correct))
-
-    #a->a and a->twin(a) and twin(a)->a
-    def test_8(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-
-        G.addSegmentWithNoSeenKmers("ATCAT")    #twin:ATGAT
-
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[G_correct.getID()] = ["ATCAT",[(0,True),(0,False),(0,False)],[(0,True),(0,False),(0,False)],0]
-        G_correct.addKmersFromAllContigs()
-        self.assertTrue(isSameGraph(G,G_correct))
-
-    def test_9(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ATT",[(0,False),(0,False)],[],0] #twin:AAT
-        G.addKmersFromAllContigs()
-
-        G.addSegmentWithNoSeenKmers("ATCAT")    #twin:ATGAT
-
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[0] = ["ATT",[(0,False),(0,False),(1,True),(1,False)],[],0]
-        G_correct.contigs[1] = ["ATCAT",[(0,False),(1,True),(1,False),(1,False)],[(0,True),(1,True),(1,False),(1,False)],0]
-        G_correct.addKmersFromAllContigs()
-        G_correct.setID(2)
-        self.assertTrue(isSameGraph(G,G_correct))
-        
-        G_naive = G.createNaive()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
-        G_naive.printContigs("G_naive")
-
-    def test_10(self):
-        G = Graph.Graph(3,pfn=True,ps=True)
-        G.addSegmentWithNoSeenKmers("AAATCCC")
-        G_naive = G.createNaive()
-        G.printContigs("G")
-        G_naive.printContigs("G_naive")
-        self.assertTrue(G.equalsNaive())
-
-    def test_11(self):
-        G = Graph.Graph(3)
-        G.addSegmentWithNoSeenKmers("TCCC")
-        G_naive = G.createNaive()
-        G.printContigs("G")
-        G_naive.printContigs("G_naive")
-        self.assertTrue(G.equalsNaive())
-
-    def test_12(self):
-        G = Graph.Graph(3)
-        G.addSegmentWithNoSeenKmers("TCCCA")
-        G_naive = G.createNaive()
-        G.printContigs("G")
-        G_naive.printContigs("G_naive")
-        self.assertTrue(G.equalsNaive())
-
-class Test_addSegmentAlreadySplitOnSelf(unittest.TestCase):
+class Test_splitSegmentOnConnToOthers(unittest.TestCase):
+    #split
     def test_1(self):
-        G = Graph.Graph(3,pfn=True,ps=True)
-        G.addSegmentAlreadySplitOnSelf("AAA")
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[0] = ["AAA",[(0,True)],[(0,True)],0]
-        G_correct.addKmersFromAllContigs()
-        G_correct.setID(1)
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
-        self.assertTrue(isSameGraph(G,G_correct))
+        k = 5
+        G = Graph.Graph(k)
+        G.contigs[G.getID()] = ["TCCAT",[],[],2]
+        G.addKmersFromAllContigs()
+        s = "ACCATT"
+        COV = 4
+        seqs = list(G.splitSegmentOnConnToOthers(s,COV))
+        self.assertTrue(("ACCAT",2) in seqs)
+        self.assertTrue( ("CCATT",2) in seqs)
+        self.assertTrue(len(seqs)==2)
 
+    #ekkert split því len(s)==k
+    def test_2(self):
+        k = 5
+        G = Graph.Graph(k)
+        G.contigs[G.getID()] = ["TCCAT",[],[],2]
+        G.addKmersFromAllContigs()
+        s = "CCATT"
+        COV = 2
+        seqs = list(G.splitSegmentOnConnToOthers(s,COV))
+        self.assertTrue(("CCATT",2) in seqs)
+        self.assertTrue(len(seqs)==1)
 
+    #Sama og 1 nema fullt af auka contigum
+    def test_3(self):
+        k = 5
+        G = Graph.Graph(k)
+        G.contigs[G.getID()] = ["TCCAT",[],[],2]
+        G.contigs[G.getID()] = ["AAAAA",[],[],2]
+        G.contigs[G.getID()] = ["CCCCC",[],[],2]
+        G.contigs[G.getID()] = ["ACCGGAAG",[],[],8]
+        G.addKmersFromAllContigs()
+        s = "ACCATT"
+        COV = 4
+        seqs = list(G.splitSegmentOnConnToOthers(s,COV))
+        self.assertTrue(("ACCAT",2) in seqs)
+        self.assertTrue( ("CCATT",2) in seqs)
+        self.assertTrue(len(seqs)==2)
+
+    #len(s)>k og ekkert split
+    def test_4(self):
+        k = 5
+        G = Graph.Graph(k)
+        G.contigs[G.getID()] = ["TCCAT",[],[],2]
+        G.addKmersFromAllContigs()
+        s = "AAACCAAC"
+        COV = 8
+        seqs = list(G.splitSegmentOnConnToOthers(s,COV))
+        self.assertTrue(("AAACCAAC",8) in seqs)
+        self.assertTrue(len(seqs)==1)
+
+"""
 class Test_addSegmentAlreadySplit(unittest.TestCase):
     def test_1(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        G.contigs[G.getID()] = ["ACCA",[],[],10]
         G.addKmersFromAllContigs()
 
         G.addSegmentAlreadySplit("TCC")
@@ -1489,9 +1431,9 @@ class Test_addSegmentAlreadySplit(unittest.TestCase):
         #create G and G_correct:
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        G.contigs[G.getID()] = ["ACCA",[],[],10]
         #twin:TGGT
-        G.contigs[G.getID()] = ["TTT",[(1,True)],[(1,True)],0]
+        G.contigs[G.getID()] = ["TTT",[(1,True)],[(1,True)],10]
 
         G_correct = Graph.Graph(3)
         G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
@@ -1508,10 +1450,10 @@ class Test_addSegmentAlreadySplit(unittest.TestCase):
         #create G and G_correct:
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        G.contigs[G.getID()] = ["ACCA",[],[],10]
         #twin:TGGT
-        G.contigs[G.getID()] = ["TTT",[(1,True),(2,True)],[(1,True),(2,True)],0]
-        G.contigs[G.getID()] = ["TTATT",[(1,True),(2,True)],[(1,True),(2,True)],0]
+        G.contigs[G.getID()] = ["TTT",[(1,True),(2,True)],[(1,True),(2,True)],10]
+        G.contigs[G.getID()] = ["TTATT",[(1,True),(2,True)],[(1,True),(2,True)],10]
 
         G_correct = Graph.Graph(3)
         G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
@@ -1524,130 +1466,109 @@ class Test_addSegmentAlreadySplit(unittest.TestCase):
         G_correct.addKmersFromAllContigs()
         G.addSegmentAlreadySplit("TCC")
         G_naive = G.createNaive()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
-        G_naive.printContigs("G_naive")
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False))
 
     def test_4(self):
-        G = Graph.Graph(3,pfn=True,ps=True)
+        G = Graph.Graph(3)
         G.addSegmentAlreadySplit("AAA")
         G_correct = Graph.Graph(3)
-        G_correct.contigs[0] = ["AAA",[(0,True)],[(0,True)],0]
+        G_correct.contigs[0] = ["AAA",[(0,True)],[(0,True)],10]
         G_correct.addKmersFromAllContigs()
         G_correct.setID(1)
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct))
-
+"""
 
 class Test_splitOthers(unittest.TestCase):
     #1 contig already in the graph
     #segment -> c0[1:]
     def test_1(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        k, G, G_correct = myHelper(5)
+        G.contigs[G.getID()] = ["ACCATT",[],[],4]
         G.addKmersFromAllContigs()
-        G.splitOthers("TCC")
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
-        G_correct.contigs[2] = ["CCA",[(1,True)],[],0]
+        G.splitOthers("TCCAT")
+        G_correct = Graph.Graph(k)
+        G_correct.contigs[G_correct.getID()] = ["ACCAT",[],[(1,True)],2]
+        G_correct.contigs[G_correct.getID()] = ["CCATT",[(0,True)],[],2]
         G_correct.addKmersFromAllContigs()
-        G_correct.setID(3)
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
 
     #1 contig already in the graph
     #segment -> c0[0:] (making sure we don't try to split)
     def test_2(self):
-        G = Graph.Graph(k=3,pil=True)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["CCAA",[],[],0]
+        k, G, G_correct = myHelper(5)
+        G.contigs[G.getID()] = ["CCAAC",[],[],2]
         G.addKmersFromAllContigs()
-        G.splitOthers("TCC")
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[0] = ["CCAA",[],[],0]
+        G.splitOthers("TCCAA")
+        G_correct.contigs[G_correct.getID()] = ["CCAAC",[],[],2]
         G_correct.addKmersFromAllContigs()
-        G_correct.setID(1)
         self.assertTrue(isSameGraph(G,G_correct))
 
     #1 contig already in the graph
     #c0[L-k-1:] -> segment
     def test_3(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        k, G, G_correct = myHelper(5)
+        G.contigs[G.getID()] = ["AAACCA",[],[],2]
         G.addKmersFromAllContigs()
-        G.splitOthers("CCG")
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
-        G_correct.contigs[2] = ["CCA",[(1,True)],[],0]
+        G.splitOthers("AACCT")
+        G_correct.contigs[G_correct.getID()] = ["AAACC",[],[(1,True)],1]
+        G_correct.contigs[G_correct.getID()] = ["AACCA",[(0,True)],[],1]
         G_correct.addKmersFromAllContigs()
-        G_correct.setID(3)
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
 
     #1 contig already in the graph
     #c0[L-k:] -> segment (making sure we don't try to split)
     def test_4(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        k, G, G_correct = myHelper(5)
+        G.contigs[G.getID()] = ["ACGTAC",[(0,False),(0,False)],[(0,False),(0,False)],2]
+        #                        GTACGT
         G.addKmersFromAllContigs()
-        G.splitOthers("CAG")
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[0] = ["ACCA",[],[],0]
+        G.splitOthers("GTAAC")
+        G_correct.contigs[G_correct.getID()] = ["ACGTAC",[(0,False),(0,False)],[(0,False),(0,False)],2]
         G_correct.addKmersFromAllContigs()
-        G_correct.setID(1)
         self.assertTrue(isSameGraph(G,G_correct))
 
     #1 contig already in the graph
     #twin(segment) -> c0[1:]
-    def test_5(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+    """
+    def test_5(self): Held að þetta eigi ekki að splitta
+        k, G, G_correct = myHelper(5)
+        G.contigs[G.getID()] = ["AAACCA",[],[],2]
+        #                        TGGTTT
         G.addKmersFromAllContigs()
-        G.splitOthers("GGA")
-        #twin: TCC
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
-        G_correct.contigs[2] = ["CCA",[(1,True)],[],0]
+        G.splitOthers("GGTTC")
+        #        twin: GAACC
+        G.printContigs()
+        G_correct = Graph.Graph(k)
+        G_correct.contigs[G_correct.getID()] = ["AAACC",[],[(1,True)],2]
+        G_correct.contigs[G_correct.getID()] = ["AACCA",[(0,True)],[],2]
         G_correct.addKmersFromAllContigs()
-        G_correct.setID(3)
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
-
+    """
     #1 contig already in the graph
     #twin(segment) -> c0[0:]    (making sure we don't try to split)
     def test_6(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        k, G, G_correct = myHelper(5)
+        G.contigs[G.getID()] = ["AAACCA",[],[],0]
         G.addKmersFromAllContigs()
-        G.splitOthers("GTT")
-        #twin: AAC
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[0] = ["ACCA",[],[],0]
+        G.splitOthers("GTTTC")
+        #twin:         GAAAC
+        G_correct.contigs[G_correct.getID()] = ["AAACCA",[],[],0]
         G_correct.addKmersFromAllContigs()
-        G_correct.setID(1)
         self.assertTrue(isSameGraph(G,G_correct))
 
     #1 contig already in the graph
     #c0[L-k-1:] -> twin(segment)
-    #   er að detta í fyrri lúppuna þ.a. næ ekki að testa þá seinni (þetta er s.s. rétt en ekki það sem ég ætlaði að testa). 
-    #   Gera stærra test til að komast í seinni lúppuna (ef ég vil testa öll tilfelli)
     def test_7(self):
-        G = Graph.Graph(3)
-        G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
+        k, G, G_correct = myHelper(5)
+        G.contigs[G.getID()] = ["AAACCA",[],[],4]
+        #                        TGGTTT
         G.addKmersFromAllContigs()
-        G.splitOthers("TGG")
-        #twin: CCA
-        G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["ACC",[],[(2,True)],0]
-        G_correct.contigs[2] = ["CCA",[(1,True)],[],0]
-        G_correct.addKmersFromAllContigs()
-        G_correct.setID(3)
-        self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
+        G.splitOthers("CGGTT")
+        #twin:         AACCG
+        #G_correct.contigs[G_correct.getID()] = ["AAACC",[],[(1,True)],2]
+        #G_correct.contigs[G_correct.getID()] = ["AACCA",[(0,True)],[],2]
+        #G_correct.addKmersFromAllContigs()
+        #self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
 
     #1 contig already in the graph
     #c0[L-k:] -> twin(segment)
@@ -1669,29 +1590,27 @@ class Test_splitOthers(unittest.TestCase):
     def test_9(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0]
-        G.contigs[G.getID()] = ["GTG",[],[],0]
+        G.contigs[G.getID()] = ["ACCA",[],[],2]
+        G.contigs[G.getID()] = ["GTG",[],[],2]
         G.addKmersFromAllContigs()
         G.splitOthers("TCC")   
         G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["GTG",[],[],0]
-        G_correct.contigs[2] = ["ACC",[],[(3,True)],0]
-        G_correct.contigs[3] = ["CCA",[(2,True)],[],0]
+        G_correct.contigs[1] = ["GTG",[],[],1]
+        G_correct.contigs[2] = ["ACC",[],[(3,True)],2]
+        G_correct.contigs[3] = ["CCA",[(2,True)],[],2]
         G_correct.addKmersFromAllContigs()
         G_correct.setID(4)
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
 
     def test_10(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["GACCAA",[],[],0]
+        G.contigs[G.getID()] = ["GACCAA",[],[],2]
         G.addKmersFromAllContigs()
         G.splitOthers("TCC")    #twin: GGA
         G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["GACC",[],[(2,True)],0]
-        G_correct.contigs[2] = ["CCAA",[(1,True)],[],0]
+        G_correct.contigs[1] = ["GACC",[],[(2,True)],1]
+        G_correct.contigs[2] = ["CCAA",[(1,True)],[],1]
         G_correct.addKmersFromAllContigs()
         G_correct.setID(3)
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
@@ -1699,12 +1618,12 @@ class Test_splitOthers(unittest.TestCase):
     def test_11(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["CACCAA",[],[],0]
+        G.contigs[G.getID()] = ["CACCAA",[],[],2]
         G.addKmersFromAllContigs()
         G.splitOthers("GGA")
         G_correct = Graph.Graph(3)
-        G_correct.contigs[1] = ["CACC",[],[(2,True)],0]
-        G_correct.contigs[2] = ["CCAA",[(1,True)],[],0]
+        G_correct.contigs[1] = ["CACC",[],[(2,True)],1]
+        G_correct.contigs[2] = ["CCAA",[(1,True)],[],1]
         G_correct.addKmersFromAllContigs()
         G_correct.setID(3)
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,pfn=False,ps=False,relaxAssertions=True))
@@ -1715,40 +1634,40 @@ class Test_splitOthers(unittest.TestCase):
 
     #fw(segment) in c
     def test_12(self):
-        G = Graph.Graph(k=15,pfn=True,ps=True,al=False)
+        G = Graph.Graph(k=15,pfn=False,ps=False,al=False)
         G_correct = Graph.Graph(15)
-        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],0]
+        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],4]
         #                             CTGTAGTATCGCTATGGTA
         #                        ATGGCCTGTAGTATCGCTA
         #                            ACTGTAGTATCGCTA
         G.addKmersFromAllContigs()
         G.splitOthers("ACTGTAGTATCGCTA")
-        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATCGCTA",[],[(1,True)],0]
-        G_correct.contigs[G_correct.getID()] = ["CTGTAGTATCGCTATGGTA",[(0,True)],[],0]
+        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATCGCTA",[],[(1,True)],2]
+        G_correct.contigs[G_correct.getID()] = ["CTGTAGTATCGCTATGGTA",[(0,True)],[],2]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,pfn=False,ps=False,relaxAssertions=True))
-        G_correct.contigs[4] = ["CTGTAGTATCGCTATGGTA",[(3,True),(5,True)],[],0]
-        G_correct.contigs[G_correct.getID()] = ["ACTGTAGTATCGCTA",[],[(4,True)],0]
+        G_correct.contigs[4] = ["CTGTAGTATCGCTATGGTA",[(3,True),(5,True)],[],2]
+        G_correct.contigs[G_correct.getID()] = ["ACTGTAGTATCGCTA",[],[(4,True)],2]
         G.addSegmentToGraph("ACTGTAGTATCGCTA")
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=True,pfn=False,ps=False,relaxAssertions=False))
 
     #fw(segment) in c (the last kmer)
     def test_13(self):
-        G = Graph.Graph(15,pfn=True,ps=True,al=False)
+        G = Graph.Graph(15,pfn=False,ps=False,al=False)
         G_correct = Graph.Graph(15)
-        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],0]
+        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],10]
         #                                 AGTATCGCTATGGTA
         #                        ATGGCCTGTAGTATCGCTATGGT
         #                                GAGTATCGCTATGGT
         G.addKmersFromAllContigs()
         G.splitOthers("GAGTATCGCTATGGT")
-        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATCGCTATGGT",[],[(1,True)],0]
-        G_correct.contigs[G_correct.getID()] = ["AGTATCGCTATGGTA",[(0,True)],[],0]
+        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATCGCTATGGT",[],[(1,True)],5]
+        G_correct.contigs[G_correct.getID()] = ["AGTATCGCTATGGTA",[(0,True)],[],5]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,pfn=False,ps=False,relaxAssertions=True))
-        G_correct.contigs[4] = ["AGTATCGCTATGGTA",[(3,True),(5,True)],[],0]
-        G_correct.contigs[G_correct.getID()] = ["GAGTATCGCTATGGT",[],[(4,True)],0]
+        G_correct.contigs[4] = ["AGTATCGCTATGGTA",[(3,True),(5,True)],[],5]
+        G_correct.contigs[G_correct.getID()] = ["GAGTATCGCTATGGT",[],[(4,True)],5]
         G_correct.addKmersFromAllContigs()
         G.addSegmentToGraph("GAGTATCGCTATGGT")
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=True,pfn=False,ps=False,relaxAssertions=False))
@@ -1758,14 +1677,14 @@ class Test_splitOthers(unittest.TestCase):
     def test_14(self):
         G = Graph.Graph(15)
         G_correct = Graph.Graph(15)
-        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],0]
+        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],10]
         #                        ATGGCCTGTAGTATC    
         #                         TGGCCTGTAGTATCGCTATGGTA
         #                        CTGGCCTGTAGTATC
         G.addKmersFromAllContigs()
         G.splitOthers("CTGGCCTGTAGTATC")
-        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATC",[],[(1,True)],0]
-        G_correct.contigs[G_correct.getID()] = ["TGGCCTGTAGTATCGCTATGGTA",[(0,True)],[],0]
+        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATC",[],[(1,True)],10]
+        G_correct.contigs[G_correct.getID()] = ["TGGCCTGTAGTATCGCTATGGTA",[(0,True)],[],10]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,pfn=False,ps=False,relaxAssertions=True))
 
@@ -1773,14 +1692,14 @@ class Test_splitOthers(unittest.TestCase):
     def test_15(self):
         G = Graph.Graph(15)
         G_correct = Graph.Graph(15)
-        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],0]
+        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],10]
         #                        ATGGCCTGTAGTATCGCTA
         #                             CTGTAGTATCGCTATGGTA
         #                             CTGTAGTATCGCTAA
         G.addKmersFromAllContigs()
         G.splitOthers("CTGTAGTATCGCTAA")
-        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATCGCTA",[],[(1,True)],0]
-        G_correct.contigs[G_correct.getID()] = ["CTGTAGTATCGCTATGGTA",[(0,True)],[],0]
+        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATCGCTA",[],[(1,True)],10]
+        G_correct.contigs[G_correct.getID()] = ["CTGTAGTATCGCTATGGTA",[(0,True)],[],10]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,pfn=False,ps=False,relaxAssertions=True))
 
@@ -1788,14 +1707,14 @@ class Test_splitOthers(unittest.TestCase):
     def test_16(self):
         G = Graph.Graph(15)
         G_correct = Graph.Graph(15)
-        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],0]
+        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],10]
         #                        ATGGCCTGTAGTATC
         #                         TGGCCTGTAGTATCGCTATGGTA
         #                         TGGCCTGTAGTATCC
         G.addKmersFromAllContigs()
         G.splitOthers("TGGCCTGTAGTATCC")
-        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATC",[],[(1,True)],0]
-        G_correct.contigs[G_correct.getID()] = ["TGGCCTGTAGTATCGCTATGGTA",[(0,True)],[],0]
+        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATC",[],[(1,True)],10]
+        G_correct.contigs[G_correct.getID()] = ["TGGCCTGTAGTATCGCTATGGTA",[(0,True)],[],10]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,pfn=False,ps=False,relaxAssertions=True))
 
@@ -1803,14 +1722,14 @@ class Test_splitOthers(unittest.TestCase):
     def test_17(self):
         G = Graph.Graph(15)
         G_correct = Graph.Graph(15)
-        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],0]
+        G.contigs[G.getID()] = ["ATGGCCTGTAGTATCGCTATGGTA",[],[],10]
         #                        ATGGCCTGTAGTATCGCTATGGT
         #                                 AGTATCGCTATGGTA
         #                                 AGTATCGCTATGGTTCAAACCTCTCAAA
         G.addKmersFromAllContigs()
         G.splitOthers("AGTATCGCTATGGTTCAAACCTCTCAAA")
-        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATCGCTATGGT",[],[(1,True)],0]
-        G_correct.contigs[G_correct.getID()] = ["AGTATCGCTATGGTA",[(0,True)],[],0]
+        G_correct.contigs[G_correct.getID()] = ["ATGGCCTGTAGTATCGCTATGGT",[],[(1,True)],10]
+        G_correct.contigs[G_correct.getID()] = ["AGTATCGCTATGGTA",[(0,True)],[],10]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,pfn=False,ps=False,relaxAssertions=True))
 
@@ -1818,7 +1737,7 @@ class Test_splitOthers(unittest.TestCase):
     def test_18(self):
         G = Graph.Graph(15)
         G_correct = Graph.Graph(15)
-        G.contigs[G.getID()] = [dbg.twin("ATGGCCTGTAGTATCGCTATGGTA"),[],[],0]
+        G.contigs[G.getID()] = [dbg.twin("ATGGCCTGTAGTATCGCTATGGTA"),[],[],10]
         #                 twin: ATGGCCTGTAGTATCGCTATGGT  
         #                             TGTAGTATCGCTATG   this km has index 6 in twin => index in c: L-k-6=24-15-6=3
         #               adding:      TTGTAGTATCGCTAT
@@ -1829,18 +1748,16 @@ class Test_splitOthers(unittest.TestCase):
         #                           ATAGCGATACTACAGGCCAT
         G.addKmersFromAllContigs()
         G.splitOthers("TTGTAGTATCGCTAT")
-        G_correct.contigs[G_correct.getID()] = ["TACCATAGCGATACTACA",[],[(1,True)],0]
-        G_correct.contigs[G_correct.getID()] = ["ATAGCGATACTACAGGCCAT",[(0,True)],[],0]
+        G_correct.contigs[G_correct.getID()] = ["TACCATAGCGATACTACA",[],[(1,True)],10]
+        G_correct.contigs[G_correct.getID()] = ["ATAGCGATACTACAGGCCAT",[(0,True)],[],10]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,pfn=False,ps=False,relaxAssertions=True))
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
 
     #bw(segment) in twin(c)
     def test_19(self):
         G = Graph.Graph(15)
         G_correct = Graph.Graph(15)
-        G.contigs[G.getID()] = [dbg.twin("ATGGCCTGTAGTATCGCTATGGTA"),[],[],0]
+        G.contigs[G.getID()] = [dbg.twin("ATGGCCTGTAGTATCGCTATGGTA"),[],[],10]
         #                 twin: ATGGCCTGTAGTATCGCTATGGT  
         #                           CCTGTAGTATCGCTA   this km has index 4 in twin => index in c: L-k-4=24-15-4=5
         #               adding:      CTGTAGTATCGCTAA
@@ -1850,37 +1767,32 @@ class Test_splitOthers(unittest.TestCase):
         #                            TAGCGATACTACAGGCCAT
         G.addKmersFromAllContigs()
         G.splitOthers("CTGTAGTATCGCTAA")
-        G_correct.contigs[G_correct.getID()] = ["TACCATAGCGATACTACAG",[],[(1,True)],0]
-        G_correct.contigs[G_correct.getID()] = ["TAGCGATACTACAGGCCAT",[(0,True)],[],0]
+        G_correct.contigs[G_correct.getID()] = ["TACCATAGCGATACTACAG",[],[(1,True)],10]
+        G_correct.contigs[G_correct.getID()] = ["TAGCGATACTACAGGCCAT",[(0,True)],[],10]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,pfn=False,ps=False,relaxAssertions=True))
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
-
-
 
 class Test_splitContig(unittest.TestCase):
     def test_1(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["AACC",[],[],0]
+        G.contigs[G.getID()] = ["AACC",[],[],10]
         #                        GGTT
-        G_correct.contigs[1] = ["AAC", [], [(2,True)], 0]
-        G_correct.contigs[2] = ["ACC", [(1,True)], [], 0]
+        G_correct.contigs[1] = ["AAC", [], [(2,True)], 10]
+        G_correct.contigs[2] = ["ACC", [(1,True)], [], 10]
         G_correct.setID(3)
         G.addKmersFromAllContigs()
         G_correct.addKmersFromAllContigs()
         G.splitContig(0,3)
-        G.printContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
 
     def test_2(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["AACCC",[],[],0]
+        G.contigs[G.getID()] = ["AACCC",[],[],10]
         #                        GGTT
-        G_correct.contigs[1] = ["AAC", [], [(2,True)], 0]
-        G_correct.contigs[2] = ["ACCC", [(1,True)], [], 0]
+        G_correct.contigs[1] = ["AAC", [], [(2,True)], 10]
+        G_correct.contigs[2] = ["ACCC", [(1,True)], [], 10]
         G.addKmersFromAllContigs()
         G_correct.setID(3)
         G_correct.addKmersFromAllContigs()
@@ -1890,10 +1802,10 @@ class Test_splitContig(unittest.TestCase):
     def test_3(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["AACCC",[],[],0]
+        G.contigs[G.getID()] = ["AACCC",[],[],10]
         #                        GGTT
-        G_correct.contigs[1] = ["AACC", [], [(2,True)], 0]
-        G_correct.contigs[2] = ["CCC", [(1,True)], [], 0]
+        G_correct.contigs[1] = ["AACC", [], [(2,True)], 10]
+        G_correct.contigs[2] = ["CCC", [(1,True)], [], 10]
         G.addKmersFromAllContigs()
         G_correct.setID(3)
         G_correct.addKmersFromAllContigs()
@@ -1904,33 +1816,31 @@ class Test_splitContig(unittest.TestCase):
     def test_4(self):
         G = Graph.Graph(15)
         G_correct = Graph.Graph(15)
-        G.contigs[G.getID()] = ["ACCAGTTGATATGAC",[],[],0] #twin:TGGT
-        G.contigs[G.getID()] = ["TCTATTCCAGGGTAGG",[],[(1,False),(1,False)],0] #twin:TAGA
+        G.contigs[G.getID()] = ["ACCAGTTGATATGAC",[],[],10] #twin:TGGT
+        G.contigs[G.getID()] = ["TCTATTCCAGGGTAGG",[],[(1,False),(1,False)],10] #twin:TAGA
         G.addKmersFromAllContigs()
         G.splitContig(1,15)
-        G_correct.contigs[0] = ["ACCAGTTGATATGAC",[],[],0]
-        G_correct.contigs[1] = ["CTATTCCAGGGTAGG",[(2,True)],[(1,False),(1,False)],0] #twin:TAG
-        G_correct.contigs[2] = ["TCTATTCCAGGGTAG",[],[(1,True)],0]
+        G_correct.contigs[0] = ["ACCAGTTGATATGAC",[],[],10]
+        G_correct.contigs[1] = ["CTATTCCAGGGTAGG",[(2,True)],[(1,False),(1,False)],10] #twin:TAG
+        G_correct.contigs[2] = ["TCTATTCCAGGGTAG",[],[(1,True)],10]
         G_correct.setID(3)
         G_correct.addKmersFromAllContigs()
         G_correct.setID(3)
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
 
     def test_5(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["ACCA",[],[],0] #twin:TGGT
-        G.contigs[G.getID()] = ["TCTA",[],[(1,False),(1,False),(2,True)],0] #twin:TAGA
-        G.contigs[G.getID()] = ["TAT",[(1,True),(2,False),(2,False)],[(2,False),(2,False)],0] #twin: ATA
+        G.contigs[G.getID()] = ["ACCA",[],[],10] #twin:TGGT
+        G.contigs[G.getID()] = ["TCTA",[],[(1,False),(1,False),(2,True)],10] #twin:TAGA
+        G.contigs[G.getID()] = ["TAT",[(1,True),(2,False),(2,False)],[(2,False),(2,False)],10] #twin: ATA
         G.addKmersFromAllContigs()
         G.splitContig(1,3)
         G_correct = Graph.Graph(3)
-        G_correct.contigs[0] = ["ACCA",[],[],0]
-        G_correct.contigs[2] = ["TAT",[(3,True),(2,False),(2,False)],[(2,False),(2,False)],0]
-        G_correct.contigs[3] = ["CTA",[(4,True)],[(2,True),(3,False),(3,False)],0] #twin:TAG
-        G_correct.contigs[4] = ["TCT",[],[(3,True)],0]
+        G_correct.contigs[0] = ["ACCA",[],[],10]
+        G_correct.contigs[2] = ["TAT",[(3,True),(2,False),(2,False)],[(2,False),(2,False)],10]
+        G_correct.contigs[3] = ["CTA",[(4,True)],[(2,True),(3,False),(3,False)],10] #twin:TAG
+        G_correct.contigs[4] = ["TCT",[],[(3,True)],10]
         G_correct.setID(5)
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
@@ -1938,17 +1848,15 @@ class Test_splitContig(unittest.TestCase):
     def test_6(self):
         G = Graph.Graph(3)
         G_correct = Graph.Graph(3)
-        G.contigs[G.getID()] = ["TTT",[(0,True),(1,True)],[(0,True),(1,True)],0]
-        G.contigs[G.getID()] = ["TTCTT",[(0,True),(1,True)],[(0,True),(1,True)],0]
-        G_correct.contigs[0] = ["TTT",[(0,True),(3,True)],[(0,True),(2,True)],0]
-        G_correct.contigs[2] = ["TTCT",[(0,True),(3,True)],[(3,True)],0]
-        G_correct.contigs[3] = ["CTT",[(2,True)],[(0,True),(2,True)],0]
+        G.contigs[G.getID()] = ["TTT",[(0,True),(1,True)],[(0,True),(1,True)],10]
+        G.contigs[G.getID()] = ["TTCTT",[(0,True),(1,True)],[(0,True),(1,True)],10]
+        G_correct.contigs[0] = ["TTT",[(0,True),(3,True)],[(0,True),(2,True)],10]
+        G_correct.contigs[2] = ["TTCT",[(0,True),(3,True)],[(3,True)],10]
+        G_correct.contigs[3] = ["CTT",[(2,True)],[(0,True),(2,True)],10]
         G_correct.setID(4)
         G.addKmersFromAllContigs()
         G_correct.addKmersFromAllContigs()
         G.splitContig(1,4)
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False,relaxAssertions=True))
 
     #New tests to thoroughly test this function
@@ -1962,13 +1870,13 @@ class Test_splitContig(unittest.TestCase):
 
     def test_7(self):
         #c->c
-        G = Graph.Graph(9,pil=True)
+        G = Graph.Graph(9,pil=False)
         G_correct = Graph.Graph(k=9)
-        G.contigs[G.getID()] = ["TTTTTTTTTCCCTTTTTTTT",[(0,True)],[(0,True)],0]
+        G.contigs[G.getID()] = ["TTTTTTTTTCCCTTTTTTTT",[(0,True)],[(0,True)],10]
         G.addKmersFromAllContigs()
         G.splitContig(0,12)
-        G_correct.contigs[0] = ["TTTTTTTTTCCC",[(1,True)],[(1,True)],0]
-        G_correct.contigs[1] = ["TTTTTCCCTTTTTTTT",[(0,True)],[(0,True)],0]
+        G_correct.contigs[0] = ["TTTTTTTTTCCC",[(1,True)],[(1,True)],10]
+        G_correct.contigs[1] = ["TTTTTCCCTTTTTTTT",[(0,True)],[(0,True)],10]
         G_correct.setID(2)
         G_correct.addKmersFromAllContigs()
         self.myAssertions(G,G_correct)
@@ -1977,11 +1885,11 @@ class Test_splitContig(unittest.TestCase):
         #c->twin(c)
         G = Graph.Graph(9)
         G_correct = Graph.Graph(9)
-        G.contigs[G.getID()] = ["GGGTATATATA",[],[(0,False),(0,False)],0]
+        G.contigs[G.getID()] = ["GGGTATATATA",[],[(0,False),(0,False)],10]
         G.addKmersFromAllContigs()
         G.splitContig(0,10)
-        G_correct.contigs[0] = ["GGGTATATAT",[],[(1,True)],0]
-        G_correct.contigs[1] = ["GTATATATA",[(0,True)],[(1,False),(1,False)],0]
+        G_correct.contigs[0] = ["GGGTATATAT",[],[(1,True)],10]
+        G_correct.contigs[1] = ["GTATATATA",[(0,True)],[(1,False),(1,False)],10]
         G_correct.setID(2)
         G_correct.addKmersFromAllContigs()
         self.myAssertions(G,G_correct)
@@ -1990,23 +1898,14 @@ class Test_splitContig(unittest.TestCase):
         #twin(c)->c
         G = Graph.Graph(9)
         G_correct = Graph.Graph(9)
-        G.contigs[G.getID()] = ["TATATATAGGG",[(0,False),(0,False)],[],0]
+        G.contigs[G.getID()] = ["TATATATAGGG",[(0,False),(0,False)],[],10]
         G.addKmersFromAllContigs()
         G.splitContig(0,10)
-        G_correct.contigs[0] = ["TATATATAGG",[(0,False),(0,False)],[(1,True)],0]
-        G_correct.contigs[1] = ["TATATAGGG",[(0,True)],[],0]
+        G_correct.contigs[0] = ["TATATATAGG",[(0,False),(0,False)],[(1,True)],10]
+        G_correct.contigs[1] = ["TATATAGGG",[(0,True)],[],10]
         G_correct.setID(2)
         G_correct.addKmersFromAllContigs()
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.myAssertions(G,G_correct)
-
-    def test_10(self):
-        pass
-
-
-
-
 
 class Test_connectSegment(unittest.TestCase):
     #1 contig already in the graph. k=3
@@ -2055,8 +1954,6 @@ class Test_connectSegment(unittest.TestCase):
         G_correct.addKmersFromAllContigs()
         G.connectSegment(0)
         self.assertTrue(isSameGraph(G,G_correct))
-
-
 
 class Test_mergeSegment(unittest.TestCase):
     #Two contigs a and b in the graph with no connections to themselves
@@ -2139,11 +2036,6 @@ class Test_mergeSegment(unittest.TestCase):
         G.addKmersFromAllContigs()
         G_correct.addKmersFromAllContigs()
         G.mergeSegment(0)
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
-        #B1 = graphEqualsNaive(G)
-        #B2 = graphEqualsNaive(G_correct)
-        #print B1,B2
         self.assertTrue(isSameGraph(G,G_correct))
 
     #case 3: twin(a)->b     (b already in graph and we're in process of adding a) 
@@ -2201,7 +2093,6 @@ class Test_mergeSegment(unittest.TestCase):
         G.addKmersFromAllContigs()
         G_correct.addKmersFromAllContigs()
         G.mergeSegment(0)
-        #print graphEqualsNaive(G)
         self.assertTrue(isSameGraph(G,G_correct,alsoCompareWithNaive=False))
 
     #-----------------------------------------------------------------------------------------
@@ -2236,8 +2127,6 @@ class Test_mergeSegment(unittest.TestCase):
 
         self.assertTrue(G_correct.isLegalDBG())
         self.assertTrue(isSameGraph(G,G_correct))
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
 
 
     #case 1: a->b.  a and b have a connection between them and b has 1 OUT connection
@@ -2258,22 +2147,16 @@ class Test_mergeSegment(unittest.TestCase):
         G.contigs[G.getID()] = ["CAG",[(1,True)],[(0,True),(3,True)],0]
         G.addKmersFromAllContigs()
 
-        print "Before merge:"
-        G.printContigs("G")
         self.assertTrue(G.isLegalGraph())
         G.mergeSegment(99)
         self.assertTrue(G.isLegalGraph())
         G.mergeSegment(2)
         self.assertTrue(G.isLegalDBG())
-        print "After merge:"
-        G.printContigs("G")
         segments = ["AGT","TCA","GTT","AGG","CGT","CAG"]
         kd = helpers.createKmerDictFromSegmentList(segments,k)
         G_correct = helpers.createNaiveFromKmerDict(kd,k)
 
         self.assertTrue(G_correct.isLegalDBG())
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
         self.assertTrue(isSameGraph(G,G_correct))
 
     #when we merge a contig which connects to itself we don't do anything
@@ -2289,8 +2172,6 @@ class Test_mergeSegment(unittest.TestCase):
         self.assertTrue(G.isLegalDBG())
         self.assertTrue(G_correct.isLegalDBG())
         self.assertTrue(isSameGraph(G,G_correct))
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
 
     #a->b
     #b->twin(b)
@@ -2306,11 +2187,10 @@ class Test_mergeSegment(unittest.TestCase):
         G_correct.contigs[2] = ["TCTA",[],[(2,False),(2,False)],0]
         G_correct.addKmersFromAllContigs()
         G_correct.setID(3)
-        #self.assertTrue(G.isLegal())
-        #self.assertTrue(G_correct.isLegal())
-        #self.assertTrue(isSameGraph(G,G_correct))
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
+        self.assertTrue(G.isLegalDBG())
+        self.assertTrue(G_correct.isLegalDBG())
+        self.assertTrue(isSameGraph(G,G_correct))
+
 
 
     #-----------------------------------------------------------------------------------------
@@ -2330,8 +2210,6 @@ class Test_mergeSegment(unittest.TestCase):
         G_correct.contigs[G_correct.getID()] = ["ACCTT",[],[],0]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct))
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
 
     #case 1: a->b->c. a has some INs
     def test_15(self):
@@ -2355,8 +2233,6 @@ class Test_mergeSegment(unittest.TestCase):
         G_correct.contigs[G_correct.getID()] = ["GTC",[(0,False)],[],0]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct))
-        G.printContigs("G")
-        G_correct.printContigs("G_correct")
 
     #case 1: a->b->c. a has some INs and c has some OUTs
     def test_16(self):
@@ -2381,66 +2257,6 @@ class Test_mergeSegment(unittest.TestCase):
         G_correct.contigs[G_correct.getID()] = ["CAA",[],[(0,False)],0]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct))
-        #B1 = graphEqualsNaive(G,G_naive=-1)
-        #B2 = graphEqualsNaive(G_correct,G_naive=-1)
-        #print B1,B2
-        #G.printContigs("G")
-        #G_correct.printContigs("G_correct")
-
-
-#----------------------------------------------------------------
-#------------------------Helper functions------------------------
-#----------------------------------------------------------------
-
-class Test_splitString(unittest.TestCase):
-    def test_1(self):
-        s0,s1 = Graph.splitString("012345",3,3)
-        self.assertEqual(s0,"012")
-        self.assertEqual(s1,"12345")
-
-    def test_2(self):
-        s0,s1 = Graph.splitString("012345",4,3)
-        self.assertEqual(s0,"0123")
-        self.assertEqual(s1,"2345")
-
-    def test_3(self):
-        s0,s1 = Graph.splitString("012345",5,3)
-        self.assertEqual(s0,"01234")
-        self.assertEqual(s1,"345")
-
-    def test_4(self):
-        s0,s1 = Graph.splitString("012345678",8,4)
-        self.assertEqual(s0,"01234567")
-        self.assertEqual(s1,"5678")
-
-    #Þarf að skoða þetta betur ef ég ætla að testa fyrir assertions
-    """def test_5(self):
-        with self.assertRaises(AssertionError) as cm:
-            #do_something()
-            print "adsfasdfasdf"
-            s0,s1 = Graph.splitString("012345678",9,4)
-            print s0
-
-        the_exception = cm.exception
-        print "bla", the_exception
-        print cm
-        #self.assertEqual(the_exception.error_code, 3)"""
-
-
-class Test_reverseList(unittest.TestCase):
-    def test_1(self):
-       L = [(0,True),(1,False)]
-       L_correct = [(0,False),(1,True)]
-       Graph.reverseList(L)
-       print L
-       print L_correct
-       L.sort()
-       L_correct.sort()
-       self.assertEqual(L,L_correct)
-
-
-
 
 if __name__ == '__main__':
     unittest.main()
-

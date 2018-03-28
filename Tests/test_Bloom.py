@@ -1,4 +1,6 @@
 #coding:utf8
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 import Graph
 from Bloom import *
@@ -56,7 +58,7 @@ def printResults(BF,fpos,FPR,p):
 class Test_Bloom(unittest.TestCase):
 	#test add and contains
 	def test_01(self):
-		print "\nTest_Bloom.test_01"
+		#print "\nTest_Bloom.test_01"
 		BF = Bloom(0.01,10)
 		BF.add("ATC")
 		self.assertTrue("ATC" in BF)
@@ -66,7 +68,7 @@ class Test_Bloom(unittest.TestCase):
 
 	#check the false positive rate
 	def test_02(self):
-		print "\nTest_Bloom.test_02"
+		#print "\nTest_Bloom.test_02"
 		n = 5000    #the number of kmers to be added to the bloom filter
 		p = 0.1
 		kmerLength=5
@@ -95,17 +97,15 @@ class Test_Bloom(unittest.TestCase):
 		ratio,cZero,cOne = BF.computeRatio()
 		self.assertTrue(BF.hasAcceptableRatio(ratio))
 
-
-
 	def test_03(self):
-		print "\nTest_Bloom.test_03"
+		#print "\nTest_Bloom.test_03"
 		BF = Bloom(0.01,10)
 		BF.add("ATC")
 		ratio,cZero,cOne = BF.computeRatio()
 		self.assertTrue(BF.hasAcceptableRatio(ratio))
 
 	def test_04(self):
-		print "\nTest_Bloom.test_04"
+		#print "\nTest_Bloom.test_04"
 		#n = 16000; kmerLength = 9; p=0.1   #0.582 sek
 		#n = 100000; kmerLength = 9; p=0.1 #3.8 sec
 		#n = 1000000; kmerLength = 9; p=0.1 #4.7 sec
@@ -139,7 +139,7 @@ class Test_Bloom(unittest.TestCase):
 		#print BF
 
 	def test_05(self):
-		print "\nTest_Bloom.test_05"
+		#print "\nTest_Bloom.test_05"
 		BF = Bloom(0.01,2,pfn=False)
 		BF.add("ATCAAAAAACCCTCTCGGGTGGGGAAATCAT")
 		BF.add("GATTATAGACACACGATATGATGGTTCCCCC")
@@ -147,14 +147,14 @@ class Test_Bloom(unittest.TestCase):
 		self.assertTrue(BF.hasAcceptableRatio(ratio))
 
 	def test_06(self):
-		print "\nTest_Bloom.test_06"
+		#print "\nTest_Bloom.test_06"
 		BF = Bloom(0.01,2,pfn=False)
 		BF.add("ATCAAAAAACCCTCTCGGGTGGGGAAATCAT")
 		BF.add("GATTATAGACACACGATATGATGGTTCCCCC")
 		self.assertTrue(BF.hasAcceptableRatio())
 
 	def test_07(self):
-		print "\nTest_Bloom.test_07"
+		#print "\nTest_Bloom.test_07"
 		BF = Bloom(0.01,2,pfn=False)
 		BF.add("ATCAAAAAACCCTCTCGGGTGGGGAAATCAT")
 		BF.add("GATTATAGACACACGATATGATGGTTCCCCC")
@@ -162,7 +162,7 @@ class Test_Bloom(unittest.TestCase):
 		self.assertFalse(BF.hasAcceptableRatio())
 
 	def test_08(self):
-		print "\nTest_Bloom.test_08"
+		#print "\nTest_Bloom.test_08"
 		alphabet = ["A","C","G","T","N"]
 		k = 31
 		fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
@@ -185,7 +185,7 @@ class Test_Bloom(unittest.TestCase):
 		self.assertTrue(BF.hasAcceptableRatio())
 
 	def test_09(self):
-		print "\nTest_Bloom.test_09"
+		#print "\nTest_Bloom.test_09"
 		alphabet = ["A","C","G","T","N"]
 		k = 31
 		fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
@@ -208,7 +208,7 @@ class Test_Bloom(unittest.TestCase):
 		self.assertTrue(BF.hasAcceptableRatio())
 
 	def test_10(self):
-		print "\nTest_Bloom.test_10"
+		#print "\nTest_Bloom.test_10"
 		alphabet = ["A","C","G","T","N"]
 		k = 31
 		fn = ["Input/Staphylococcus_aureus/frag_1.fastq", "Input/Staphylococcus_aureus/frag_2.fastq"]
@@ -231,7 +231,7 @@ class Test_Bloom(unittest.TestCase):
 		self.assertTrue(BF.hasAcceptableRatio())
 
 	def test_11(self):
-		print "\nTest_Bloom.test_11"
+		#print "\nTest_Bloom.test_11"
 		alphabet = ["A","C","G","T","N"]
 		k = 31
 		fn = ["Input/Staphylococcus_aureus/frag_1.fastq", "Input/Staphylococcus_aureus/frag_2.fastq"]
@@ -253,11 +253,8 @@ class Test_Bloom(unittest.TestCase):
 		self.assertTrue(FPR<=p)
 		self.assertTrue(BF.hasAcceptableRatio())
 
-
-
 def generate_n_kmers_of_length_k(n,k):
 	return [''.join(i) for i in itertools.product("ACGT",repeat=k)][0:n]
-
 
 if __name__ == '__main__':
 	unittest.main()

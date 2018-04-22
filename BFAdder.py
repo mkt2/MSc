@@ -33,21 +33,20 @@ def newDictValues(COV,G,BF,maxAddCov,genome_dict,genome_len):
     else:
         return [G_len, G_frac]
 
-def updateDict(COV,covDict,maxAddCov,values,i):
+def updateDict(COV,covDict,maxAddCov,maxSplitCov,values):
     #values = [G_len,G_frac,BF_len,BF_frac]
     #covDict[maxAddCov][0][i] = COV
-    covDict[maxAddCov][0].append(COV)
-    assert(len(covDict[maxAddCov])>1)
+    key = (maxAddCov,maxSplitCov)
+    covDict[key][0].append(COV)
+    assert(len(covDict[key])>1)
     if maxAddCov==float('inf'):
         assert(len(values)==4)
         for j in [1,2,3,4]:
-            #covDict[maxAddCov][j][i] = values[j-1]
-            covDict[maxAddCov][j].append(values[j-1])
+            covDict[key][j].append(values[j-1])
     else:
         assert(len(values)==2)
         for j in [1,2]:
-            #covDict[maxAddCov][j][i] = values[j-1]
-            covDict[maxAddCov][j].append(values[j-1])
+            covDict[key][j].append(values[j-1])
 
 def naive_createDict(fn,k):
     #Creates a dict, kd, storing every k-mer from the reads
@@ -105,27 +104,28 @@ def naive_GFA_nonSingleton_BF(fn,k,BF,fileName,pfn=True,printProgress=False):
     G,cs = dbg.all_contigs(kd,k)
     dbg.print_GFA_to_file(G,cs,k,fileName)
 
-def BFAdder(fn,k,BF,G,maxAddCov,covDict,read_len,genome_len,sampleAtReadsNumber,pfn=False,printProgress=False):
+def BFAdder(fn,k,BF,G,maxAddCov,maxSplitCov,read_len,genome_len,sampleAtReadsNumber,pfn=False,printProgress=False):
+    #assert(maxSplitCov == float('inf'))
     if pfn:
         print "BFAdder",locals()
     if not isinstance(fn, list):
         print "fn:",fn
         raise Exception('fn has to be a list')
-    MSC = float('inf')    #Max Split Cov
     alpha = 0.01
     covFactor = (float(read_len) / genome_len) * pow(1-alpha,k) #Til að flýta fyrir reikningnum á COV
     COV = 0		#Hversu oft við höfum séð hvern k-mer að meðaltali
     measureIndex = 0
-    for segmentCount, s in enumerate(helpers.segments(fn,k)):
-        print segmentCount
-        if segmentCount==500:
-            break
-        assert(G.assertLegal==False)
+    #for segmentCount, s in enumerate(helpers.segments(fn,k)):
+    for s, segmentCount in helpers.segments(fn,k):
+        #print segmentCount
+        #if segmentCount==10000:
+        #    break
+        #assert(G.assertLegal==False)
         if segmentCount in sampleAtReadsNumber:
             if printProgress:
                 print "Taking sample nr. "+str(measureIndex)+" out of "+str(len(sampleAtReadsNumber)-1)+" at segment nr. "+str(segmentCount)
             values = newDictValues(COV,G,BF,maxAddCov,genome_dict,genome_len)
-            updateDict(COV,covDict,maxAddCov,values,measureIndex)
+            yield COV, values
             measureIndex+=1
 
         start = 0
@@ -136,12 +136,14 @@ def BFAdder(fn,k,BF,G,maxAddCov,covDict,read_len,genome_len,sampleAtReadsNumber,
                     BF.add(rep_km)
                 if i>start:
                     goodSequence = s[start:i+k-1]
-                    G.addSegmentToGraph(goodSequence,CS=(COV>MSC))
+                    G.addSegmentToGraph(goodSequence,CS=(COV>maxSplitCov))
+                    #assert(G.isLegalDBG())
                 start = i+1
 
         #If we reach the end of s we add the current goodSequence
         if len(s)-start>=k:
-            G.addSegmentToGraph(s[start:],CS=(COV>MSC))
+            G.addSegmentToGraph(s[start:],CS=(COV>maxSplitCov))
+            #assert(G.isLegalDBG())
         COV = segmentCount * covFactor
 
     #Final measurement when finished running through the last file:
@@ -149,28 +151,44 @@ def BFAdder(fn,k,BF,G,maxAddCov,covDict,read_len,genome_len,sampleAtReadsNumber,
         print "measureIndex="+str(measureIndex)+" after finishing the loop"
         print "Taking sample nr. "+str(measureIndex)+" out of "+str(len(sampleAtReadsNumber)-1)+" at segment nr. "+str(segmentCount)
     values = newDictValues(COV,G,BF,maxAddCov,genome_dict,genome_len)
-    updateDict(COV,covDict,maxAddCov,values,measureIndex)
-    assert(G.carefulSplit==False), "Á meðan ég er ekki byrjaður að kalla á BFAdder með maxSplitCov ætti G.carefulSplit aldrei að verða True"
+    yield COV, values
 
 def selectGenome(genomeName):
-	if genomeName=="t":
-		maxAddCovs = [5, 10, 15, 20, 30,float('inf')]
-		fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
-		numberOfKmers = 8000000
-	elif genomeName=="sa":
-		maxAddCovs = [5, 10, 15, 20, 30,float('inf')]
-		fn = ["Input/Staphylococcus_aureus/frag_1.fastq", "Input/Staphylococcus_aureus/frag_2.fastq"]
-		numberOfKmers = 100000000
-	else:
-		raise Exception("The genomeName must be either 't' or 'sa'!")
-	return maxAddCovs, fn, numberOfKmers
+    if genomeName=="t":
+        filters = [ \
+        (5,float('inf')), \
+		(10,12),(10,15),(10,20),(10,30),(10,float('inf')), \
+		(15,16),(15,17),(15,20),(15,25),(15,30),(15,float('inf')), \
+		(20,float('inf')), \
+		(30,float('inf')), \
+		(float('inf'),float('inf'))]
+        fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
+        numberOfKmers = 8000000
+    elif genomeName=="sa":
+        filters = [ \
+        (15,20),(15,30),(15,float('inf')), \
+		(20,30),(20,22),(20,float('inf')), \
+		(30,float('inf')), \
+		(float('inf'),float('inf'))]
+        fn = ["Input/Staphylococcus_aureus/frag_1.fastq", "Input/Staphylococcus_aureus/frag_2.fastq"]
+        numberOfKmers = 100000000
+    else:
+        raise Exception("The genomeName must be either 't' or 'sa'!")
+    #return maxAddCovs, maxSplitCovs, fn, numberOfKmers
+    return filters, fn, numberOfKmers
 
 #Need to run preprocessInput.py before running this file
 if __name__ == "__main__":
     genomeName = sys.argv[1]
-    maxAddCovs, fn, numberOfKmers = selectGenome(genomeName)
-    #maxAddCovs = maxAddCovs[-1:]
-    runTimes = [-1]*len(maxAddCovs)
+    #maxAddCovs, maxSplitCovs, fn, numberOfKmers = selectGenome(genomeName)
+    filters, fn, numberOfKmers = selectGenome(genomeName)
+    #numGraphs = 0
+    #for x in maxSplitCovs:
+    #    for y in x:
+    #        numGraphs += 1
+    #print "numGraphs:", numGraphs
+    numGraphs = len(filters)
+    runTimes = [-1]*numGraphs
     pfn = False
     printProgress = True
 
@@ -194,7 +212,6 @@ if __name__ == "__main__":
     sampleEvery = int(totNumberOfReads / (NoM-1))
     sampleAtReadsNumber = range(0,totNumberOfReads-sampleEvery,sampleEvery)
     if (totNumberOfReads%(NoM-1))!=0:
-        print 'adding an extra value'
         sampleAtReadsNumber.append(totNumberOfReads+1)
     print "totNumberOfReads", totNumberOfReads
     print sampleAtReadsNumber, len(sampleAtReadsNumber)
@@ -203,45 +220,43 @@ if __name__ == "__main__":
     #   Geymir COV, lenG, fracG, lenBF og fracBF fyrir G
     #   Geymir COV, lenG og fracG fyrir sérhvert Gx
     #   ATH: Þetta eru allt listar með NoM gildum hver
-    t = len(sampleAtReadsNumber)    #annaðhvort NoM eða NoM+1
-    print "t="+str(t)+", NoM="+str(NoM)
-    #t = NoM+1   #XX var að bæta við +1 til að prófa fyrir SA
     covDict = collections.defaultdict(list)
-    for maxAddCov in maxAddCovs:
-        if maxAddCov==float('inf'):
-            #covDict[maxAddCov] = [[0]*t,[0]*t,[0]*t,[0]*t,[0]*t]
-            covDict[maxAddCov] = [[],[],[],[],[]]
+    for key in filters:
+        (MAC,MSC) = key
+        if MAC==float('inf'):
+            covDict[key] = [[],[],[],[],[]]
         else:
-            #covDict[maxAddCov] = [[0]*t,[0]*t,[0]*t]
-            covDict[maxAddCov] = [[],[],[]]
+            covDict[key] = [[],[],[]]
     
     start = time.time()
     #Keyrum BF_counter fyrir sérhvert maxAddCov og tökum tímana
     start = time.time()
-    for i, maxAddCov in enumerate(maxAddCovs):
+    for i, (MAC,MSC) in enumerate(filters):
+        #def createGraphName(maxAddCov,maxSplitCov,withSpaces=False,latexFormat=True):
+        gn = helpers.createGraphName(MAC,MSC,False,False)
+        print "Starting on gn="+gn+":"
         start_i = time.time()
-        print "Starting on maxAddCov="+str(maxAddCov)
-        print "Initializing an empty bloom filter BF and Graph G"+str(maxAddCov)
+        print "Initializing an empty bloom filter and graph"
         BF = Bloom.Bloom(p,numberOfKmers,pfn=False)
-        theGraph = Graph.Graph(k,pfn=False,ps=False,al=False,pil=False,printInit=False)
+        theGraph = Graph.Graph(k,pfn=False,ps=False,al=False,pil=True,printInit=False)
+        #theGraph = Graph.Graph(k,pfn=False,ps=False,al=True,pil=True,printInit=False)  #<----to test
         assert(theGraph.isEmpty())
-
         print "Running BFAdder:"
-        BFAdder(fn,k,BF,theGraph,maxAddCov,covDict,numKmersPerRead,genomeLen,sampleAtReadsNumber,pfn,printProgress)
+        for COV, dictValues in BFAdder(fn,k,BF,theGraph,MAC,MSC,numKmersPerRead,genomeLen,sampleAtReadsNumber,pfn,printProgress):
+            updateDict(COV,covDict,MAC,MSC,dictValues)
         timeInSeconds = int(time.time()-start_i)
         runTimes[i] = timeInSeconds
-        print "Done creating G"+str(maxAddCov)
-        break   #Tímabundið bara að keyra BFAdder fyrir eitt maxCov og ekki save-a niðurstöður eða neitt
-"""
-        print "Saving G"+str(maxAddCov)+" to G"+str(maxAddCov)+".txt"
-        theGraph.printToFile(outDir+"/G"+str(maxAddCov)+".txt")
+        #print "Done creating "+gn
+        gn_f = gn+".txt"
+        #print "Saving "+gn+" to "+gn_f
+        theGraph.printToFile(outDir+"/"+gn_f)
 
-        print "Finished creating G"+str(maxAddCov)+". Time: "+helpers.returnTime(timeInSeconds)
+        print "Finished creating "+gn+" and saving it to "+gn_f+". Time: "+helpers.returnTime(timeInSeconds)
         print "-------------------------------------------------------\n"
 	
-    helpers.printRuntimesToFile(genomeName, maxAddCovs, runTimes)
+    helpers.printRuntimesToFile(genomeName, filters, runTimes)
     print "About to print covDict to fileName="+outDir+"/covDict.txt"
     helpers.printCovDictToFile(covDict,fileName=outDir+"/covDict.txt")
     print "Finished running BFAdder.py on genome="+str(genomeName)
-    print "Total time: "+helpers.returnTime(int(time.time()-start))"""
+    print "Total time: "+helpers.returnTime(int(time.time()-start))
 

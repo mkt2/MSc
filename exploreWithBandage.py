@@ -31,17 +31,17 @@ if __name__ == "__main__":
     #Create G
     print "Starting on G"
     G = Graph.Graph(k,al=False)
-    G.createGraphFromFile(outDir+"/Ginf.txt")
-    G.saveAs_GFA_toFile(outDir+"/Ginf.GFA")
+    G.createGraphFromFile(outDir+"/G_inf_inf.txt")
+    G.saveAs_GFA_toFile(outDir+"/G_inf_inf.GFA")
     print "contigsInG:", len(G)
     print "kmersInG:  ", G.numKmerPairs()
 
     #Create G_naive
     print "Starting on G_naive using a BF for filtering singletons:"
     BF = Bloom.Bloom(p,numberOfKmers,pfn=False)
-    BFAdder.naive_GFA_nonSingleton_BF(fn,k,BF,outDir+"/Ginf_naive3.GFA",False)
+    BFAdder.naive_GFA_nonSingleton_BF(fn,k,BF,outDir+"/G_inf_naive3.GFA",False)
     print "Starting on G_naive using a dict for filtering singletons"
-    BFAdder.naive_GFA_nonSingleton(fn,k,outDir+"/Ginf_naive2.GFA")
+    BFAdder.naive_GFA_nonSingleton(fn,k,outDir+"/G_inf_naive2.GFA")
     
 
     

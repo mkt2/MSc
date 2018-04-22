@@ -58,15 +58,37 @@ def findN50(G,k):
     #print "about to return"
     return N50,N50_ID,N50_c,numInSum
 
-def printN50ToFile(MCL,N50L,L50L,outDir):
+def printN50ToFile(filters,N50L,L50L,outDir):
     fileName = outDir+"/N50.txt"
     f = open(fileName, 'w')
-    for i in range(0,len(MCL)):
-        if MCL[i]==-1:
-            f.write("$\\infty$"+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
-        else:
-            f.write(str(MCL[i])+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
+    #for i in range(0,len(MCL)):
+    for i, (MAC,MSC) in enumerate(filters):
+        gn = helpers.createGraphName(MAC,MSC,False,True)
+        f.write(gn+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
+        #if MCL[i]==-1:
+        #    f.write("$\\infty$"+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
+        #else:
+        #    f.write(str(MCL[i])+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
     f.close()
+
+def selectGenome(genomeName):
+	if genomeName=="t":
+		filters = [ \
+        (5,float('inf')), \
+		(10,float('inf')), \
+		(15,float('inf')), \
+		(20,float('inf')), \
+		(30,float('inf')), \
+		(float('inf'),float('inf'))]
+	elif genomeName=="sa":
+		filters = [ \
+        (15,float('inf')), \
+		(20,float('inf')), \
+		(30,float('inf')), \
+		(float('inf'),float('inf'))]
+	else:
+		raise Exception("The genomeName must be either 't' or 'sa'!")
+	return filters
 
 if __name__ == "__main__":
     #Inputs
@@ -75,18 +97,18 @@ if __name__ == "__main__":
 
     #Define some stuff
     outDir = "Output/"+genomeName
-    maxAddCovs = [5, 10, 15, 20, 30,float('inf')]
-    N50_list = [-2]*len(maxAddCovs)
-    L50_list = [-2]*len(maxAddCovs)
+    filters = selectGenome(genomeName)
+    N50_list = [-2]*len(filters)
+    L50_list = [-2]*len(filters)
 
     #Find N50 for each maxAddCov
-    for i,maxAddCov in enumerate(maxAddCovs):
+    for i,(MAC,MSC) in enumerate(filters):
         Gx = Graph.Graph(k,al=False)
-        fileName = "/G"+str(maxAddCov)+".txt"
-        Gx.createGraphFromFile(outDir+fileName)
-        #print findN50(Gx,k)
+        fileName = helpers.createGraphName(MAC,MSC,False,False)+".txt"
+        #fileName = "/G"+str(maxAddCov)+".txt"
+        Gx.createGraphFromFile(outDir+"/"+fileName)
         N50,N50_ID,N50_c,L50 = findN50(Gx,k)
         N50_list[i] = N50
         L50_list[i] = L50
 
-    printN50ToFile(maxAddCovs,N50_list,L50_list,outDir)
+    printN50ToFile(filters,N50_list,L50_list,outDir)

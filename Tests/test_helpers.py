@@ -147,54 +147,59 @@ class Test_reverseList(unittest.TestCase):
        self.assertEqual(L,L_correct)
 
 class Test_splitOnConnToSelf(unittest.TestCase):
+    #splitOnConnToSelf(s,s_twin,k,i,j,start=0)
     def test_1(self):
         s = "AAAAAC"
         k = 5
-        COV = 4
-        seqs = list(helpers.splitOnConnToSelf(s,k,COV))
-        self.assertTrue(("AAAAA",2) in seqs)
-        self.assertTrue(("AAAAC",2) in seqs)
+        seqs = []
+        for i,j in helpers.splitOnConnToSelf(s,dbg.twin(s),len(s),k,0,len(s),0):
+            seqs.append(s[i:j])
+        self.assertTrue("AAAAA" in seqs)
+        self.assertTrue("AAAAC" in seqs)
         self.assertTrue(len(seqs)==2)
 
     def test_2(self):
         s = "AAAACG"
         #    CGTTTT
         k = 5
-        COV = 4
-        seqs = list(helpers.splitOnConnToSelf(s,k,COV))
-        self.assertTrue(("AAAACG",4) in seqs)
+        seqs = []
+        for i,j in helpers.splitOnConnToSelf(s,dbg.twin(s),len(s),k,0,len(s),0):
+            seqs.append(s[i:j])
+        self.assertTrue("AAAACG" in seqs)
         self.assertTrue(len(seqs)==1)
 
     def test_3(self):
         s = "AAAAACG"
         k = 5
-        COV = 6
-        seqs = list(helpers.splitOnConnToSelf(s,k,COV))
-        self.assertTrue(("AAAAA",2) in seqs)
-        self.assertTrue(("AAAACG",4) in seqs)
+        seqs = []
+        for i,j in helpers.splitOnConnToSelf(s,dbg.twin(s),len(s),k,0,len(s),0):
+            seqs.append(s[i:j])
+        self.assertTrue("AAAAA" in seqs)
+        self.assertTrue("AAAACG" in seqs)
         self.assertTrue(len(seqs)==2)
 
     def test_4(self):
         s = "CAAAAACTTTTTCC"
         #    GGAAAAAGTTTTTG
         k = 5
-        COV = 20
-        seqs = list(helpers.splitOnConnToSelf(s,k,COV))
-        #print seqs
-        self.assertTrue(("CAAAA",2) in seqs)
-        self.assertTrue(( "AAAAA",2) in seqs)
-        self.assertTrue((  "AAAACTTTT",10) in seqs)
-        self.assertTrue((        "TTTTT",2) in seqs)
-        self.assertTrue((         "TTTTCC",4) in seqs)
+        seqs = []
+        for i,j in helpers.splitOnConnToSelf(s,dbg.twin(s),len(s),k,0,len(s),0):
+            seqs.append(s[i:j])
+        self.assertTrue("CAAAA" in seqs)
+        self.assertTrue( "AAAAA" in seqs)
+        self.assertTrue(  "AAAACTTTT" in seqs)
+        self.assertTrue(        "TTTTT" in seqs)
+        self.assertTrue(         "TTTTCC" in seqs)
         self.assertTrue(len(seqs)==5)
 
     #See what happens when len(s)>k and still no split
     def test_5(self):
         s = "AAACCC"
         k = 5
-        COV = 4
-        seqs = list(helpers.splitOnConnToSelf(s,k,COV))
-        self.assertTrue(("AAACCC",4) in seqs)
+        seqs = []
+        for i,j in helpers.splitOnConnToSelf(s,dbg.twin(s),len(s),k,0,len(s),0):
+            seqs.append(s[i:j])
+        self.assertTrue("AAACCC" in seqs)
         self.assertTrue(len(seqs)==1)
 
 class Test_canConn(unittest.TestCase):

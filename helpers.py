@@ -84,88 +84,104 @@ def splitOnSeen(s,k,kmersIn_s,out=[]):
     return out+[s]
 """
 
-def splitOnConnToSelf(s,k,COV):
-    #print "splitOnConnToSelf(s="+str(s)+")"
-    L = len(s)
-    if L < k:
-        yield "", 0
-    if L==k:
-        yield s, COV
-    else:
-        splitSomething = True
-        while splitSomething:
-            splitSomething = False
-            for i, a in enumerate(dbg.kmers(s,k)):
-                a_twin = dbg.twin(a)
-                #First split where internal k-mers in s connect to themselves:
-                if i!=L-k:
-                    #If a is not the last km in s we split behind a if it connects to itself:
-                    #if canConnToSelfFront(a,k):
-                    #canConn(a,a,True,True,k,False) or canConn(a,a,True,False,k,False)
-                    for y in dbg.fw(a):
-                        if (y==a) or (y==a_twin):
-                            #print "case 1. a="+str(a)+", s="+str(s)+", i="+str(i)
-                            s0, s = splitString(s,i+k,k)
-                            COV0, COV = splitCov(s0,s,k,COV)
-                            yield s0, COV0
-                            splitSomething = True
-                            break
-                    if splitSomething:  #To break out of the outer for-loop as well
-                        break
-                if i!=0: 
-                    #If a is not the first km in s we  split in front of a if it connects to itself:
-                    #if canConnToSelfBack(a,k):
-                    #canConn(a,a,True,True,k,False) or canConn(a,a,False,True,k,False)
-                    for y in dbg.bw(a):
-                        if y==a_twin:   #Tékkaði á a->a í lúppunni áðan
-                            #print "case 2. a="+str(a)
-                            s0, s = splitString(s,i+k-1,k)
-                            COV0, COV = splitCov(s0,s,k,COV)
-                            yield s0, COV0
-                            splitSomething = True
-                            break
-                    if splitSomething:  #To break out of the outer for-loop as well
-                        break
-                assert(splitSomething==False)
-                #Now split where internal k-mers in s connect to other k-mers in s
-                if i<L-k-1:
-                    #a is neither the last nor second to last k-mer in s
-                    #   so b may be the last k-mer but not out of bounds
-                    for j, b in enumerate(dbg.kmers(s[i+1:],k),start=i+1):
-                        b_twin = dbg.twin(b)
-                        if i!=L-k:	#a is not the last km in s
-                            #Check if we have a non trivial forward connection:
-                            #if canConn(a,b,True,False,k) or (canConn(a,b,True,True,k) and (j!=i+1)):
-                            for y in dbg.fw(a):
-                                if (y==b_twin) or ((j!=i+1) and (y==b)):
-                                    #print "case 3. a="+str(a)+". b="+str(b)
-                                    s0, s = splitString(s,i+k,k)	#split behind a
-                                    COV0, COV = splitCov(s0,s,k,COV)
-                                    yield s0, COV0
-                                    splitSomething = True
-                                    break
-                            if splitSomething:  #To break out of the outer for-loop as well
-                                break
-                        if i!=0:	#a is not the last km in s
-                            #Check if we have a non trivial backward connection:
-                            #if canConn(b,a,False,True,k) or (canConn(b,a,True,True,k) and (j!=i-1)):
-                            for y in dbg.bw(a):
-                                if (y==b_twin) or ((j!=i-1) and (y==b)):
-                                    #print "case 4 a="+str(a)+". b="+str(b)
-                                    s0, s = splitString(s,i+k-1,k)	#split in front of a
-                                    COV0, COV = splitCov(s0,s,k,COV)
-                                    yield s0, COV0
-                                    splitSomething = True
-                                    break
-                            if splitSomething:  #To break out of the outer for-loop as well
-                                break
-                        assert(splitSomething==False)
-                    if splitSomething:  #To break out of the outer for-loop as well
-                        break
-		#If we didn't need to split anywhere we know that s
-		#doesn't need to be split further due to connections to itself
-        assert(splitSomething==False)
-        yield s, COV
+def splitOnConnToSelf(s,s_twin,L,k,i,j,start):
+    #    i                          j         L
+    #s: |                          |  trash  |
+
+    #            i   i+k            j         L
+    #s: | added |       unseen     |  trash  |
+    #           | a |
+    #                
+    #            start  i           j         L
+    #s: | added | good |   unseen  |  trash  |
+    #                  | a |
+    #                       i+k
+    #print "splitOnConnToSelf(s="+str(s)+", s_twin="+str(s_twin)+", k="+str(k)+", i="+str(i)+", L="+str(L)+", start="+str(start)+")"
+    if (j-start<k) or (j-i<k):
+        #print "case -1"
+        return
+    if j-start==k:
+        #print "case 0"
+        #yield s[start:j]
+        yield start, j
+        return
+    a = s[i:i+k]
+    a_twin = s_twin[L-k-i:L-i]
+    assert(a_twin==dbg.twin(a))
+    #assert(len(a_twin)==k), a_twin
+    for y in dbg.bw(a):
+        #a->a
+        if (y==a):
+            #print "case 1"
+            if i>0 and i>start:
+                yield start, i+k-1
+                #yield s[start:i+k-1]
+            #yield a
+            yield i,i+k
+            for temp1,temp2 in splitOnConnToSelf(s,s_twin,L,k,i+1,j,i+1):
+                yield temp1,temp2
+            return
+        #twin(a)->a
+        if (y==a_twin):
+            #print "case 2"
+            if i>0 and i>start:
+                yield start, i+k-1
+                #yield s[start:i+k-1]
+            start = i
+        #b->a
+        if i>0 and i>start:
+            index = s.find(s, i+1)
+            if index!=-1:
+                #print "case 3"
+                yield start, i+k-1
+                #yield s[start:i+k-1]
+                start = i
+        #twin(b)->a
+        if i>0 and i>start:
+            index = s_twin.find(y,(L-k-i)+1)
+            if index!=-1:
+                #print "case 4"
+                yield start, i+k-1
+                #yield s[start:i+k-1]
+                start = i
+    #a->twin(a)
+    for y in dbg.fw(a):
+        if y==a_twin:
+            #print "case 5"
+            #yield s[start:i+k]
+            yield start, i+k
+            for temp1,temp2 in splitOnConnToSelf(s,s_twin,L,k,i+1,j,i+1):
+                yield temp1,temp2
+            return
+        #a->b
+        index = s.find(y, i+2)
+        if index!=-1:
+            #print "case 6, y="+str(y)
+            yield start, i+k
+            #yield s[start:i+k]
+            for temp1,temp2 in splitOnConnToSelf(s,s_twin,L,k,i+1,j,i+1):
+                yield temp1,temp2
+            return
+    #a->twin(b) = b->twin(a)
+    for y in dbg.bw(a_twin):
+        index = s.find(y, i+1)
+        if index!=-1:
+            #print "case 7"
+            #yield s[start:i+k]
+            yield start, i+k
+            for temp1,temp2 in splitOnConnToSelf(s,s_twin,L,k,i+1,j,i+1):
+                yield temp1,temp2
+            return
+    #If a is the last kmer we return s[start:]
+    if i+k==j:
+        #print "case 8"
+        #yield s[start:j]
+        yield start, j
+        return
+    #Recursively call to get the next a
+    #print "case 9"
+    for temp1,temp2 in splitOnConnToSelf(s,s_twin,L,k,i+1,j,start):
+        yield temp1,temp2
 
 def canConn(a,b,A,B,k,assertStuff=False):
     #Returns True if k-mers a and b cann connect together
@@ -265,66 +281,139 @@ def file_len(fname):
             pass
     return i + 1
 
-
+def createGraphName(maxAddCov,maxSplitCov,withSpaces=False,latexFormat=False):
+    latex_inf = "$\\infty$"
+    if latexFormat:
+        s = "G"
+    else:
+        s = "G_"
+    if withSpaces:
+        s+=" "
+    if maxAddCov == float('inf'):
+        if latexFormat:
+            s += latex_inf
+        else:
+            s += 'inf'
+    else:
+        s += str(maxAddCov)
+    if latexFormat:
+        pass
+    else:
+        s += "_"
+    if maxSplitCov==float('inf'):
+        if latexFormat:
+            s += latex_inf
+        else:
+            s += 'inf'
+    else:
+        if withSpaces:
+            s += str(maxSplitCov)
+        else:
+            s += str(maxSplitCov)
+    #s = G10s15
+    return s
+    #G_10_15
+    #G_inf_inf
 
 #---------------------------------------------------------------------------
 #------------------------Functions to work with time------------------------
 #---------------------------------------------------------------------------
 def returnTime(timeInSeconds):
     timeInSeconds = int(timeInSeconds)
+    val = secTo_m_s(timeInSeconds)
     if timeInSeconds<60:
         return str(timeInSeconds)+" seconds"
+    else:
+        return str(val[0])+" minutes and "+str(val[1])+" seconds"
+
+def secTo_m_s(timeInSeconds):
+    timeInSeconds = int(timeInSeconds)
+    if timeInSeconds<60:
+        return timeInSeconds
     else:
         s = timeInSeconds%60
         m = timeInSeconds/60
         assert m*60+s==timeInSeconds
-        return str(m)+" minutes and "+str(s)+" seconds"
+        return m, s
         
 #Prints the run times to a file in a format which can be copied 
 #directly into a latex tabular environment
-def printRuntimesToFile(genomeName, maxAddCovs, runTimes):
+#def printRuntimesToFile(genomeName, maxAddCovs, maxSplitCovs, runTimes):
+def printRuntimesToFile(genomeName, filters, runTimes):
     print "printRunTimesToFile()"
-    #modify runTimes so it becomes a string with the format:
-        #x min y sec    <--- if time>1 min
-        #y sec          <----if time<=1 min
     def modRunTimes(runTimes):
         runTimeStrings = [""]*len(runTimes)
         for i, rt in enumerate(runTimes):
-            if rt > 60:
-                rt_s = int(rt)%60
-                rt_m = int(rt)/60
-                runTimeStrings[i] = str(rt_m) + " min, " + str(rt_s) + " sec"
+            val = secTo_m_s(rt)
+            if rt < 60:
+                runTimeStrings[i] = str(val) + " sec"
             else:
-                runTimeStrings[i] = str(rt) + " sec"
+                runTimeStrings[i] = str(val[0]) + " min, " + str(val[1]) + " sec"
         return runTimeStrings
     
     #maxAddCovs = [5, 10, 15, 20, 30,float('inf')]
     runTimes = modRunTimes(runTimes)
     timeFile = "Output/runTimes_t.txt"
+    latex_inf = "$\\\\infty$"
+    latex_newline = "\\\\\n"
     if genomeName=="t":
         tf = open(timeFile, 'w')
-        for i,maxAddCov in enumerate(maxAddCovs):
-            if maxAddCov == float('inf'):
-                tf.write("$\\\\infty$"+" & "+runTimes[i]+" & \\\\\n")
-            else:
-                tf.write(str(maxAddCovs[i])+" & "+runTimes[i]+" & \\\\\n")
+        for i,(MAC,MSC) in enumerate(filters):
+            #for maxSplitCov in maxSplitCovs[i]:
+            s = createGraphName(MAC,MSC)
+            s += " & "+runTimes[i]+" & "+latex_newline
+            #s = G10s15 & 59 sec & newline
+            tf.write(s)
         tf.close()
     elif genomeName=="sa":
+        #raise Exception("printRunTimesToFile er ekki tilbúið fyrir sa")
         tf_old = open(timeFile, 'r')
         tf = open("Output/runTimes_tAndSA.txt", 'w')
+        #graphNames = []
+        #rest = []
+        nameDict = collections.defaultdict(tuple)
+        #G20->[t_time, sa_time]
         for i, line in enumerate(tf_old):
             line=line[0:-3]
-            lineCov = line.strip().split(" & ")[0]
-            if lineCov=="$\\infty$":
-                lineCov = float('inf')
-            elif lineCov=="$\\\\infty$":
-                print "We used the elif!!!!!!!!!!!!!!!!!!!!!!11"
-                lineCov = float('inf')
+            #print line
+            temp = line.strip().split(" & ")
+            temp[1] = temp[1][0:-2]
+            #print temp
+            if temp[0]=="G$\\infty$":
+                nameDict["G"+latex_inf] = [temp[1],-1]
             else:
-                print "lineCov:",lineCov
-                lineCov = int(lineCov)
-            if lineCov==maxAddCovs[i]:
-                tf.write(str(line)+runTimes[i]+" \\\\\n")
+                nameDict[temp[0]] = [temp[1],-1]
+        runTimeCounter = -1
+        for i,(MAC,MSC) in enumerate(filters):
+            #for maxSplitCov in maxSplitCovs[i]:
+            runTimeCounter += 1
+            gn = createGraphName(MAC,MSC)
+            if gn in nameDict:
+                nameDict[gn][1] = runTimes[runTimeCounter]
+            else:
+                nameDict[gn] = ["",runTimes[runTimeCounter]]
+                #tf.write(gn+" & "+rest[j]+" "+runTimes[index]+latex_newline)
+        
+        for key,value in nameDict.iteritems():
+            print key,value
+        Ginf_key = "G_inf_inf"
+        temp = nameDict[Ginf_key]
+        Ginf_val = "G$\\\\infty$ & "+temp[0]+" & "+temp[1]+latex_newline
+        del nameDict[Ginf_key]
+        nameList = [k+" & "+v[0]+" & "+str(v[1])+latex_newline for k,v in nameDict.iteritems()]
+        print nameList
+        print nameList[0].split("_")
+
+        nameList.sort(key=lambda x: (int(x.split("_")[1]), float(x.split("_")[2][0:3])))
+        for i, v in enumerate(nameList):
+            nameList[i] = nameList[i][0]+nameList[i][2:]
+            if "s " in nameList[i]:
+                index = nameList[i].find("s ")
+                nameList[i] = nameList[i][0:index-1]+nameList[i][index]+nameList[i][index+2:]
+        nameList.append(Ginf_val)
+        for v in nameList:
+            #print v
+            tf.write(v)
     else:
         raise Exception("Illegal value for genomeName="+str(genomeName)+". It must be either t or sa")
 
@@ -335,13 +424,15 @@ def printRuntimesToFile(genomeName, maxAddCovs, runTimes):
 #----------------------------------------------------------------------------
 def segments(fn,k):
     #yields segments from the reads, one segment at a time
+    segmentCount = 0
     for f in fn:
         h = open(f, "rU")
         for lineNr,line in enumerate(h):
             if (lineNr%4 == 1):
+                segmentCount+=1
                 segments = filter(lambda x: len(x)>=k and all([c in alphabet for c in x]),line.strip().split("N"))
                 for s in segments:
-                    yield s
+                    yield s, segmentCount
 
 def createKmerDictFromGenomeFile(k,genomeFile):
     #Creates a k-merdict from a .fa or .fasta file
@@ -524,29 +615,36 @@ def fractionFromGenomeInObject(kmersInGenome,numKmersInGenome,Object,isGraph=1):
 
 def printCovDictToFile(covDict,fileName):
     f = open(fileName, 'w')
-    for maxAddCov, values in covDict.iteritems():
+    #for maxAddCov, values in covDict.iteritems():   #<---virkar ekki því covDict.keys() er núna (maxAddCov,maxSplitCov)
+    for key, values in covDict.iteritems():
+        maxAddCov = key[0]
+        maxSplitCov = key[1]
         #values = [COV, G_len,G_frac,BF_len,BF_frac] fyrir G (maxAddCov = float('inf'))
         #values = [COV, G_len,G_frac] fyrir sérhvert Gx
         if maxAddCov == float('inf'):
             assert(len(values)==5)
             #[COV, G_len, G_frac, BF_len, BF_frac] = values
-            f.write(str(maxAddCov)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+";"+str(values[3])+";"+str(values[4])+"\n")
+            f.write(str(key)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+";"+str(values[3])+";"+str(values[4])+"\n")
         else:
             assert(len(values)==3)
-            f.write(str(maxAddCov)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+"\n")
+            f.write(str(key)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+"\n")
     f.close()
 
 def readCovDictFromFile(fileName):
     f = open(fileName, 'rU')
     covDict = collections.defaultdict(list)
+    inf = float('inf')  #Used in the eval statement to convert inf to float('inf)
     for line in f:
         line = line.rstrip('\n').split(";")
-        maxAddCov = float(line[0])
+        key = eval(line[0])
+        maxAddCov = float(key[0])
+        maxSplitCov = float(key[1])
+        #print maxAddCov, maxSplitCov
         if maxAddCov!=float('inf'):
             maxAddCov = int(maxAddCov)
-        covDict[maxAddCov] = [[]]*(len(line)-1)
+        covDict[key] = [[]]*(len(line)-1)
         for j in range(0,len(line)-1):
-            covDict[maxAddCov][j] = eval(line[j+1])
+            covDict[key][j] = eval(line[j+1])
     f.close()
     return covDict
 
@@ -590,19 +688,16 @@ def createNaiveFromReads(fn,k,GraphObject):
 
 
 if __name__ == "__main__":
-    #kmersInGenome = readKmersFromFileToDict("Output/t/kmers_genome.txt")
-    #print readGenomeInfoFromFile("Output/t/genome_info.csv")
-    kd1 = collections.defaultdict(int)
-    kd2 = collections.defaultdict(int)
-    kd1["A"] = "a"
-    kd1["B"] = "b"
-    kd1["C"] = "c"
-    kd2["D"] = "d"
-    kd2["A"] = "A"
-    #kd1 = A B C
-    #kd2 = A D
-    #kd = B C
-    kd = difference(kd1,kd2)
-    assert(("B" in kd) and ("C" in kd) and not ("A" in kd) and not ("D" in kd))
-    print kd
+    genomeName = "sa"
+    filters = [ \
+    (15,20),(15,30),(15,float('inf')), \
+    (20,30),(20,float('inf')), \
+    (30,float('inf')), \
+    (float('inf'),float('inf'))]
+    numGraphs = len(filters)
+    runTimes = [-1]*numGraphs
+    for i in range(0,len(runTimes)):
+        runTimes[i] = i
 
+    print runTimes
+    printRuntimesToFile(genomeName, filters, runTimes)

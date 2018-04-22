@@ -1,7 +1,7 @@
 #coding:utf8
 import Graph, dbg
 import sys, collections
-from BF_counter import BF_counter_naive
+#from BF_counter import BF_counter_naive
 
 #Before:	G1 and G2 represent two legal DBGs
 #After:		returns True if G1 and G2 are the same DBG. Otherwise returns False

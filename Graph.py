@@ -48,29 +48,17 @@ class Graph:
 		self.printIsLegal = pil
 
 		#Things for maxSplitCov:
-		self.carefulSplit = False		#When self.carefulSplit==True then we only split a contig when we have been told to do so before
-		self.splitDict = collections.defaultdict(list)
+		#self.carefulSplit = False		#When self.carefulSplit==True then we only split a contig when we have been told to do so before
+		self.splitDict = collections.defaultdict(int)
+		#(c_ID, i) -> count
+		#c_ID is the ID of contig C
+		#i is the index in the contig
+		#count stores how often we have been told before that we need to split C at index i
 
 	def __len__(self):
 		return len(self.contigs)
 
 	#Skilar hvort km sé í grafinu
-	"""
-	def __contains__(self,km):
-		#Returns True if km occurs in any contig in the graph
-		for v in self.contigs.values():
-			contig = v[0]
-			twin_contig = dbg.twin(contig)
-			for kmer in dbg.kmers(contig,self.k):
-				if kmer==km:
-					return True
-			for kmer in dbg.kmers(twin_contig,self.k):
-				if kmer==km:
-					return True
-		return False
-	"""
-	
-	#Mögulega hraðvirkara
 	def __contains__(self,km):
 		return km in self.kmers
 
@@ -315,16 +303,19 @@ class Graph:
 		for ID, values in self.contigs.iteritems():
 			self.addKmersFromContig(ID,values[0])
 
-	def addKmersFromContig(self,ID,c="-1"):
+	def addKmersFromContig(self,ID,c="-1",c_twin="-1"):
 		#Before: 	c is a contig with ID ID
 		#After:		all kmers from c and their twins have been added to the kmerDict
 		if c=="-1":
 			c = self.contigs[ID][0]
+		if c_twin=="-1":
+			c_twin = dbg.twin(c)
 		for i, km in enumerate(dbg.kmers(c,self.k)):
 			self.kmers[km] = [ID,i,True]
-		for i, km in enumerate(dbg.kmers(dbg.twin(c),self.k)):
+		for i, km in enumerate(dbg.kmers(c_twin,self.k)):
 			self.kmers[km]= [ID,i,False]
 
+	"""
 	def deleteKmersFromContig(self,ID,c="-1"):
 		#Before: 	c is a contig with ID ID
 		#After:		all kmers from c and their twins have been deleted from self.kmers
@@ -334,6 +325,7 @@ class Graph:
 			if km in self.kmers:
 				del self.kmers[km]
 				del self.kmers[dbg.twin(km)]
+	"""
 
 	def getID(self):
 		#returns the lowest available ID in the graph. Maintains self.ID as
@@ -391,8 +383,8 @@ class Graph:
 	#--------------------------------------------------------------------------
 	def isLegalDBG(self, skipKmers=False):
 		#assert(False), "We should never call this"
-		if self.printIsLegal:
-			print "isLegalDBG(skipKmers="+str(skipKmers)+")"
+		#if self.printIsLegal:
+		#	print "isLegalDBG(skipKmers="+str(skipKmers)+")"
 		#We start by making sure that we have a legal Graph
 		#	-Make sure the dict of contigs has a list of 4 values for each contig
 		#	and all of them of the correct type
@@ -422,8 +414,8 @@ class Graph:
 
 	def isLegalGraph(self, skipKmers=False):
 		#assert(False), "We should never call this"
-		if self.printIsLegal:
-			print "isLegalGraph()"
+		#if self.printIsLegal:
+		#	print "isLegalGraph()"
 		for c_ID in self.contigs:
 			#Make sure the dict has a list of 4 values for each contig
 			if not len(self.contigs[c_ID])==4:
@@ -508,8 +500,8 @@ class Graph:
 
 	def isLegal_kmerDict(self):
 		#assert(False), "We should never call this"
-		if self.printIsLegal:
-			print "isLegal_kmerDict()"
+		#if self.printIsLegal:
+		#	print "isLegal_kmerDict()"
 		#make sure all kmers in correct place
 		for c_ID in self.contigs:
 			[c,c_IN,c_OUT,c_COV] = self.contigs[c_ID]
@@ -525,6 +517,9 @@ class Graph:
 					if self.printIsLegal:
 						print "kmer table is broken - incorrect ID"
 						print i,km,ID,c_ID
+						print c_ID, self.contigs[c_ID]
+						print ID, self.contigs[ID]
+						print c==self.contigs[ID][0]
 					return False
 				if not index==i:
 					if self.printIsLegal:
@@ -578,8 +573,8 @@ class Graph:
 
 	def isLegal_ID(self):
 		#assert(False), "We should never call this"
-		if self.printIsLegal:
-			print "isLegal_ID()"
+		#if self.printIsLegal:
+		#	print "isLegal_ID()"
 		ID_max = -1
 		for ID in self.contigs:
 			if ID>ID_max:
@@ -597,8 +592,8 @@ class Graph:
 
 	def isLegal_IN_and_OUT(self):
 		#assert(False), "We should never call this"
-		if self.printIsLegal:
-			print "isLegal_IN_and_OUT()"
+		#if self.printIsLegal:
+		#	print "isLegal_IN_and_OUT()"
 		#make sure connections go both ways:
 		for c_ID in self.contigs:
 			[c,c_IN,c_OUT,c_COV] = self.contigs[c_ID]
@@ -669,8 +664,8 @@ class Graph:
 		#After:		if some contig contains a connection to itself
 		#			return False if it's not of the correct form. [(0,False),(0,False)] instead of
 		#			[(0,False)] for example
-		if self.printIsLegal:
-			print "isLegal_connectionsToSelf()"
+		#if self.printIsLegal:
+		#	print "isLegal_connectionsToSelf()"
 		#if self.printStatus:
 		#	self.printContigs("Inside isLegal_connectionsToSelf")
 		#Iterate through all contigs in the graph
@@ -731,8 +726,8 @@ class Graph:
 
 	def isLegal_merge(self):
 		#assert(False), "We should never call this"
-		if self.printIsLegal:
-			print "isLegal_merge()"
+		#if self.printIsLegal:
+		#	print "isLegal_merge()"
 		for ID, [c,IN,OUT,COV] in self.contigs.iteritems():
 			[canMerge1,a_ID,b_ID,A,B] = self.canMergeOUT(ID)
 			[canMerge2,a_ID,b_ID,A,B] = self.canMergeIN(ID)
@@ -969,324 +964,165 @@ class Graph:
 	#--------------------------------------------------------------------------
 	#--------------------addSegmentToGraph and subfunctions--------------------
 	#--------------------------------------------------------------------------
-	def addSegmentToGraph(self,segment,CS=False):
+	def addSegmentToGraph(self,s,CS=False):
+		#print "addSegmentToGraph(s="+str(s)+")"
 		#Before:	segment is a DNA string
 		#			this Graph is a legal DBG graph
 		#After:		segment has been added to the graph
 		#			the kmers from segment have been added to self.kmers
 		#			the graph is a legal DBG graph
 		if self.printFunctionNames:
-			print "addSegmentToGraph(segment="+str(segment)+")"
+			print "addSegmentToGraph(s="+str(s)+")"
 		if self.printStatus:
 			self.printContigs("inside addSegmentToGraph")
 		if self.assertLegal:
 			assert self.isLegalDBG()
-		segment_L = len(segment)
-		if segment_L < self.k:
+		L = len(s)
+		if L < self.k:
 			return
+		#if CS==True:
+		#	self.carefulSplit = True
+		#	print "We're setting carefulSplit=True"
+		#	print "s:", s
+		#assert(self.carefulSplit==False),"Haven't implemented maxSplitCov yet"
 
-		if CS==True:
-			self.carefulSplit = True
-			print "We're setting carefulSplit=True"
-			print "segment:", segment
-		assert(self.carefulSplit==False),"Haven't implemented maxSplitCov yet"
-
-		start = 0
-		kmersInSegment = set()
-		totCov = 0
-		SL = collections.defaultdict(int)
-		for i, km in enumerate(dbg.kmers(segment,self.k)):
-			km = min(km,dbg.twin(km))
-			B1 = km in self
-			B2 = km in kmersInSegment
-			if not (B1 or B2):	#We have not seen this kmer before
-				kmersInSegment.add(km)
-				totCov += 2
-			else:				#We have seen this kmer before
-				#Update the cov
-				if B2:
-					totCov += 1
-				if B1:
-					[contigID, index, B] = self.kmers[km]
-					self.contigs[contigID][3] += 1
-				if i-start>=1:
-					toAdd = segment[start:i-1+self.k]
-					if self.assertLegal:
-						assert(len(toAdd)>=self.k)
-					SL[toAdd] = totCov
-				totCov = 0
-				start = i+1
-		
-		if start <= segment_L-self.k:
-			toAdd = segment[start:]
-			if self.assertLegal:
-				assert(len(toAdd)>=self.k)
-			SL[toAdd] = totCov
-		if self.assertLegal:
-			for s, s_COV in SL.iteritems():
-				assert(len(s)>=self.k), "len(s)="+str(len(s))+", s="+str(s)
-				assert(s_COV>=2)
-
-		#SL geymir nú öll segment, s, sem innihalda enga k-mera sem 
-		# hafa komið fyrir í s eða grafinu. s->COV
-		#Fyrir hvert s í SL:
+		#Fyrir hvert s í segment sem við höfum aldrei séð áður:
 		#	1. Splittum s á tengingum við sjálft sig og skilum einu s2 í einu
 		#	2. Splittum s2 á tengingum við þá sem í grafinu og skilum einu s3 í einu
 		#	3. Bætum s3 við grafið
-		for s,s_COV in SL.iteritems():
-			for s2, s2_COV in helpers.splitOnConnToSelf(s,self.k,s_COV):
-				for s3, s3_COV in self.splitSegmentOnConnToOthers(s2,s2_COV):
-					#s3 has been split on connections to itself and the contigs in the graph
-					if not s3=="":
-						self.splitOthers(s3)		#<-- Eina fallið sem breytist þegar nota maxSplitCov
-						s3_ID = self.getID()
-						self.contigs[s3_ID] = [s3,[],[],s3_COV]
-						self.addKmersFromContig(s3_ID,s3)
-						self.connectSegment(s3_ID,s3)
-						self.mergeSegment(s3_ID)
-						if self.assertLegal:
-							assert self.isLegalDBG()
+		#for s,s_COV in SL.iteritems():
+		s_twin = dbg.twin(s)
+		for i,j in self.splitSegmentOnSeenKmers(s,s_twin,L):
+			assert(i>=0)
+			assert(j<=L)
+			assert(j-i>=self.k)
+			if self.assertLegal:
+				s_test = s[i:j]
+				assert(len(s_test)>=self.k)
+				for temp in dbg.kmers(s_test,self.k):
+					assert(temp not in self)
+					assert(dbg.twin(temp) not in self)
+			for i2,j2 in helpers.splitOnConnToSelf(s,s_twin,L,self.k,i,j,i):
+				assert(i2>=i)
+				assert(j2<=j)
+				assert(j2-i2>=self.k)
+				if self.assertLegal:
+					s2 = s[i2:j2]
+					assert(len(s2)>=self.k)
+					for temp in dbg.kmers(s2,self.k):
+						assert(temp in s_test), "\n"+str(s)+"\n"+str(s_test)+"\n"+str(s2)
+						assert(temp not in self)
+						assert(dbg.twin(temp) not in self)
+				for i3,j3 in self.splitSegmentOnConnToOthers(s,L,i2,j2,i2):
+					#s3 does not need to be split any further
+					assert(i3>=i2)
+					assert(j3<=j2)
+					assert(j3-i3>=self.k)
+					s3 = s[i3:j3]
+					if self.assertLegal:
+						assert(len(s3)>=self.k)
+						for temp in dbg.kmers(s3,self.k):
+							assert(temp not in self)
+							assert(dbg.twin(temp) not in self)
+					if CS:
+						#Either add s3 as normal or mark that we have been told to split
+						skipDueTo_CS = self.splitOthers(s3,CS=True)
+						if skipDueTo_CS:
+							continue
+					else:
+						self.splitOthers(s3,CS=False)		#<-- Eina fallið sem breytist þegar nota maxSplitCov
+					s3_ID = self.getID()
+					self.contigs[s3_ID] = [s3,[],[],helpers.cLen(s3,self.k)*2]
+					self.addKmersFromContig(s3_ID,s3)
+					self.connectSegment(s3_ID,s3)
+					self.mergeSegment(s3_ID)
+					if self.assertLegal:
+						assert self.isLegalDBG()
 
-
-	"""Gamla nýja útgáfan af addSegmentToGraph
-	def oldAddSegment():
-		#Búum til SL2 þar sem við splittum öllum segments í SL á 
-		# tengingum við sjálfa sig
-		SL2 = collections.defaultdict(int)
-		for s,s_COV in SL.iteritems():
-			temp = collections.defaultdict(int)			#Stores the sequences from s after splitting. Along with their COVs
-			helpers.splitOnConnToSelf(s,self.k,s_COV,temp)
-			for t,t_COV in temp.iteritems():
-				SL2[t] = t_COV
-		
-		#Hér væri sniðugt að setja assertion til að tryggja að allir km í SL2 tengist ekki
-		# hver við annan
-
-		#Búum því næst til SL3 þar sem við splittum öllum segments
-		# í SL2 á tengingum við kmera í grafinu
-		SL3 = collections.defaultdict(int)
-		for s,s_COV in SL2.iteritems():
-			temp = collections.defaultdict(int)			#Stores the sequences from s after splitting. Along with their COVs
-			self.splitSegmentOnConnToOthers(s,s_COV,temp)
-			for t,t_COV in temp.iteritems():
-				SL3[t] = t_COV
-
-		#SL3 inniheldur nú segments sem þarf ekki að splitta meira.
-		# Bætum þeim öllum við grafið
-		for s,s_COV in SL3.iteritems():
-			self.splitOthers(s)		#<-- Eina fallið sem breytist þegar nota maxSplitCov
-			s_ID = self.getID()
-			self.contigs[s_ID] = [s,[],[],s_COV]
-			self.addKmersFromContig(s_ID,s)
-			self.connectSegment(s_ID,s)
-			self.mergeSegment(s_ID)
-
-		if self.assertLegal:
-			assert self.isLegalDBG()
-	"""
-	
-	#temp = self.splitOnConnToOthers(s,s_COV)
-	def splitSegmentOnConnToOthers(self,s,COV):
-		L = len(s)
-		if L < self.k:
-			yield "", 0
-		if L == self.k:
-			yield s, COV
-		else:
-			splitSomething = True
-			while splitSomething:
-				splitSomething = False
-				for i, km in enumerate(dbg.kmers(s,self.k)):
-					if i!=L-self.k:
-						for y in dbg.fw(km):
-							if y in self:	#a non last kmer in s connects to a node in the graph
-								s0, s = helpers.splitString(s,i+self.k,self.k)	#split behind km
-								COV0, COV = helpers.splitCov(s0,s,self.k,COV)
-								yield s0, COV0
-								splitSomething = True
-								break
-						if splitSomething:
-							break
-					if i!=0:
-						for y in dbg.bw(km):
-							if y in self: #a non first kmer in s has a connection from a node in the graph
-								s0, s = helpers.splitString(s,i+self.k-1,self.k)	#split in front of km
-								COV0, COV = helpers.splitCov(s0,s,self.k,COV)
-								yield s0, COV0
-								splitSomething = True
-								break
-						if splitSomething:
-							break
-					assert(splitSomething==False)
-
-			#If we didn't need to split anywhere we know that s
-			#doesn't need to be split further	
-			assert(splitSomething==False)		
-			yield s, COV
-
-	"""
-	def addSegmentWithNoSeenKmers(self,segment,COV):
-		def addAndReturn(s0,s1,COV):
-			COV0, COV1 = helpers.splitCov(s0,s1,self.k,COV)
-			self.addSegmentWithNoSeenKmers(s0,COV0)
-			self.addSegmentWithNoSeenKmers(s1,COV1)
+	def splitSegmentOnSeenKmers(self,s,s_twin,L):
+		#print "splitSegmentOnSeenKmers(s="+str(s)+")"
+		#Pre:	s is a segment
+		#	yields prefixes of s which don't contain any seen k-mers.
+		#	Increments the cov of seen k-mers by 1
+		if L<self.k:
 			return
+		elif L==self.k:
+			if s in self:
+				contigID = self.kmers[s][0]
+				self.contigs[contigID][3] += 1
+				return
+			else:
+				#print "yielding 2, s:           ", s
+				yield 0, L
+				return
+		kmersIn_s = set()
+		start = 0
+		for i, km in enumerate(dbg.kmers(s,self.k)):
+			#print i,km,start
+			km_twin = s_twin[L-self.k-i:L-i]
+			km = min(km,km_twin)
+			B1 = km in self
+			B2 = km in kmersIn_s
+			if not (B1 or B2):		#We have not seen km before
+				kmersIn_s.add(km)
+			else:					#We have seen km before
+				if B1:				#increment cov by one
+					contigID = self.kmers[km][0]
+					self.contigs[contigID][3] += 1
+				if i-start!=0:
+					#				         start
+					#split s into:   | seen |  s0  |          | where
+					#                |  	   | km |         |
+					#                           i    i+k
+					if start<=L-self.k:
+						#yield s[start:i-1+self.k]
+						#print start, i-1+self.k
+						yield start, i-1+self.k
+				start = i+1
+		if start<=L-self.k:
+			#print "yielding 4, s[start:]:   ", s[start:]
+			#yield s[start:]
+			#print start, L
+			yield start, L
+			if self.assertLegal:
+				assert(len(s[start:])>=self.k)
 
-		#COV is the total coverage of the k-mers in segment
-		#Helper function for addSegmentToGraph
-		#Before:	segment is a DNA string
-		#			This Graph is a legal DBG graph
-		#			We may need to split segment before adding it to G
-		#Post:	We don't need to split segment, due to connections to itself, before adding it to G
-		#		We may need to split segment, due to connections to the contigs in G
-		if self.printFunctionNames:
-			print "addSegmentWithNoSeenKmers(segment="+str(segment)+")"
-		if self.printStatus:
-			self.printContigs("inside addSegmentWithNoSeenKmers")
-		if self.assertLegal:
-			assert self.isLegalDBG()
-		L = len(segment)
-		if L < self.k:
+	def splitSegmentOnConnToOthers(self,s,L,i,j,start):
+		if j-start < self.k:
 			return
-		elif L == self.k:
-			self.addSegmentAlreadySplit(segment)
+		elif j-start == self.k:
+			yield start, j
 			return
-		else:
-			#First split where internal k-mers in segment connect to themselves:
-			for i, a in enumerate(dbg.kmers(segment,self.k)):	#Spurning að henda þessari for-lykkju fyrir aftan hina
-				if i!=L-self.k:
-					#If a is not the last km in segment we split behind a if it connects to itself:
-					if helpers.canConnToSelfFront(a,self.k):
-						s0, s1 = helpers.splitString(segment,i+self.k,self.k)
-						addAndReturn(s0,s1,COV)
-				if i!=0: 
-					#If a is not the first km in segment we  split in front of a if it connects to itself:
-					if helpers.canConnToSelfBack(a,self.k):
-						s0, s1 = helpers.splitString(segment,i+self.k-1,self.k)
-						addAndReturn(s0,s1,COV)
-
-			#Now check if a k-mer, a, in segment connects to the other k-mers in segment
-			for i, a in enumerate(dbg.kmers(segment,self.k)):
-				for j, b in enumerate(dbg.kmers(segment,self.k),start=i+1):	#Held ég ætti að geta látið j byrja í i+1!!!!!!!!!!!!!!!!!! Taka pælingu þegar búinn að skrifa fallið í heild
-					if i!=L-self.k:	#a is not the last km in segment
-						#Check if we have a non trivial forward connection:
-						if helpers.canConn(a,b,True,False,self.k) or (helpers.canConn(a,b,True,True,self.k) and (j!=i+1)):
-							s0, s1 = helpers.splitString(segment,i+self.k,self.k)	#split behind a
-							addAndReturn(s0,s1,COV)
-					if i!=0:	#a is not the last km in segment
-						#Check if we have a non trivial backward connection:
-						if helpers.canConn(b,a,False,True,self.k) or (helpers.canConn(b,a,True,True,self.k) and (j!=i-1)):
-							s0, s1 = helpers.splitString(segment,i+self.k-1,self.k)	#split in front of a
-							addAndReturn(s0,s1,COV)
-
-		#If we didn't need to split anywhere we know that segment
-		#doesn't need to be split further due to connections to itself
-		if self.printStatus:
-			print "Adding due to no split"				
-		self.addSegmentAlreadySplitOnSelf(segment,COV)
-		if self.assertLegal:
-			assert self.isLegalDBG()
-
-	def addSegmentAlreadySplitOnSelf(self,segment,COV):
-		#Before:	segment is a DNA string
-		#			This Graph is a legal DBG graph
-		#			segment does not need to be split further because of connections to itself
-		#			We might need to split segment further due to connections to the contigs in the graph
-		if self.printFunctionNames:
-			print "addSegmentAlreadySplitOnSelf(segment="+str(segment)+")"
-		if self.printStatus:
-			self.printContigs("inside addSegmentAlreadySplitOnSelf")
-		if self.assertLegal:
-			assert self.isLegalDBG()
-		L = len(segment)
-		if L < self.k:
+		#for i, km in enumerate(dbg.kmers(s,self.k)):
+		km = s[i:i+self.k]
+		if i>start:
+			for y in dbg.bw(km):
+				if y in self: #a non first kmer in s has a connection from a node in the graph
+					#s0, s = helpers.splitString(s,i+self.k-1,self.k)	#split in front of km
+					#yield s0
+					yield start, i+self.k-1
+					for temp1,temp2 in self.splitSegmentOnConnToOthers(s,L,i,j,i):
+						yield temp1, temp2	#hugsa að þetta gæti orðið óendanleg lúppa
+					return
+		if i!=j-self.k:
+			for y in dbg.fw(km):
+				if y in self:	#a non last kmer in s connects to a node in the graph
+					#s0, s = helpers.splitString(s,i+self.k,self.k)	#split behind km
+					#yield s0
+					yield start, i+self.k
+					for temp1,temp2 in self.splitSegmentOnConnToOthers(s,L,i+1,j,i+1):
+						yield temp1, temp2
+					return
+		#If a is the last kmer we return s[start:]
+		if i+self.k==j:
+			yield start, j
 			return
-		if L == self.k:
-			self.addSegmentAlreadySplit(segment,COV)
-			return
-		else:
-			for i, km in enumerate(dbg.kmers(segment,self.k)):
-				if self.printStatus:
-					print i, km
-				if i!=L-self.k:
-					for y in dbg.fw(km):
-						if (y in self.kmers):	#a non last kmer in segment connects to a node in the graph
-							if self.printStatus:
-								print "fw, y in kmers. y =", y
-							s0, s1 = helpers.splitString(segment,i+self.k,self.k)	#split behind km
-							self.addSegmentAlreadySplitOnSelf(s0)
-							self.addSegmentAlreadySplitOnSelf(s1)
-							return
-				if i!=0:
-					for y in dbg.bw(km):
-						if (y in self.kmers): #a non first kmer in segment has a connection from a node in the graph
-							if self.printStatus:
-								print "bw, y in kmers. y =", y
-							s0, s1 = helpers.splitString(segment,i+self.k-1,self.k)	#split in front of km
-							self.addSegmentAlreadySplitOnSelf(s0)
-							self.addSegmentAlreadySplitOnSelf(s1)
-							return
+		#Recursively call to get the next a
+		#print "case 9"
+		for temp1,temp2 in self.splitSegmentOnConnToOthers(s,L,i+1,j,start):
+			yield temp1,temp2
 
-		#If we didn't need to split anywhere we know that segment
-		#doesn't need to be split further
-		if self.printStatus:
-			print "Adding due to no split"				
-		self.addSegmentAlreadySplit(segment)
-		if self.assertLegal:
-			assert self.isLegalDBG()
-
-	def addSegmentAlreadySplit(self,segment):
-		#helper function for addSegmentWithNoSeenKmers
-		#Pre:		segment is a DNA string
-		#			The graph is a legal DBG graph
-		#			Segment does not need to be split up further
-		#			We may have to split up contigs which the ends of segment can connect to
-		#Post:
-		#			Segment has been added to the graph
-		#			the kmers from segment have been added to self.kmers
-		#			No contigs need to be split up further
-		#			The graph is NOT necessary a legal DBG Graph (we might need to merge segment with it's connections)
-		if self.printFunctionNames:
-			print "addSegmentAlreadySplit(segment="+str(segment)+")"
-		if self.printStatus:
-			self.printContigs("inside addSegmentAlreadySplit")
-		if self.assertLegal:
-			assert self.isLegalDBG()
-		if len(segment) < self.k:
-			if self.printStatus:
-				print "We don't add segment because it's too short"
-			return
-
-		self.splitOthers(segment)
-
-		#give segment an ID and add it to self.contigs with COV=2*(the number of k-mers in c)
-		ID = self.getID()
-		self.contigs[ID] = [segment,[],[],2*helpers.cLen(segment,self.k)]
-
-		#add the kmers from segment to self.kmers
-		self.addKmersFromContig(ID,segment)
-
-		if self.printStatus:
-			self.printContigs("After calling splitOthers(segment) inside addSegmentAlreadySplit and adding segment to the graph")
-			self.printKmers()
-
-		#connect segment to other contigs in the graph
-		self.connectSegment(ID,segment)
-
-		if self.assertLegal:
-			assert self.isLegalGraph()	#The graph is not a legal DBG because we might be able to merge some segments
-
-		#merge with connecting contigs where possible
-		self.mergeSegment(ID)
-
-		#Now segment has been fully added to the graph.
-		#Note: The graph is now a legal DBG so we can now think of segment as a contig
-
-		if self.assertLegal:
-			assert self.isLegalDBG()
-	"""
-	#def splitOthers(self,s,doneContigs=set()):
-	def splitOthers(self,s,doneContigs=set()):
+	def splitOthers(self,s,CS=False):
 		#Helper function for addSegmentAlreadySplit
 		#Pre:		The graph is a legal DBG
 		# 			s does not need to be split further before being added to the graph
@@ -1302,125 +1138,57 @@ class Graph:
 		first_twin = dbg.twin(first)
 		last = s[len(s)-self.k:]	#last is the last km in s
 		last_twin = dbg.twin(last)
-		#kmersToSplitOn = collections.defaultdict(list)
 		splitSomething = True
 		while splitSomething:
-			print "entering loop"
 			splitSomething = False
-			for y in dbg.fw(last):
-				print 'Case 1. last='+str(last)+', y='+str(y)
-				for km, [c_ID, c_i, c_B] in self.kmers.iteritems():
-					if c_B and (c_i!=0) and (y==km):
-						self.splitContig(c_ID, c_i+self.k-1)	#split before km
+			for km in dbg.fw(last):
+				if km in self.kmers:		#s->km
+					[c_ID, c_i, c_B] = self.kmers[km]
+					if c_B and (c_i!=0):
+						if CS:
+							count = self.splitDict[c_ID,c_i+self.k-1]
+							if count==0:
+								self.splitDict[c_ID,c_i+self.k-1] += 1
+								return True
+						self.splitContig(c_ID,c_i+self.k-1)		#split before km
 						splitSomething = True
-						break
-			for y in dbg.bw(last_twin):
-				print 'Case 2. last_twin='+str(last_twin)+', y='+str(y)
-				for km, [c_ID, c_i, c_B] in self.kmers.iteritems():
-					if c_B and (c_i!=0) and (y==km):
-						self.splitContig(c_ID, c_i+self.k-1)	#split before km
+			for km in dbg.fw(first_twin):
+				if km in self.kmers:		#twin(s)->km
+					[c_ID, c_i, c_B] = self.kmers[km]
+					if c_B and (c_i!=0):
+						if CS:
+							count = self.splitDict[c_ID,c_i+self.k-1]
+							if count==0:
+								self.splitDict[c_ID,c_i+self.k-1] += 1
+								return True
+						self.splitContig(c_ID,c_i+self.k-1)		#split before km
 						splitSomething = True
-						break
-			for y in dbg.bw(first):
-				for km, [c_ID, c_i, c_B] in self.kmers.iteritems():
-					if c_B and (y==km):
-						c_L = len(self.contigs[c_ID][0])
-						if c_i!=(c_L-self.k):
-							self.splitContig(c_ID, c_i+self.k)		#split after km
-							splitSomething = True
-							break
-			for y in dbg.fw(first_twin):
-				for km, [c_ID, c_i, c_B] in self.kmers.iteritems():
-					if c_B and (y==km):
-						c_L = len(self.contigs[c_ID][0])
-						if c_i!=(c_L-self.k):
-							self.splitContig(c_ID, c_i+self.k)		#split after km
-							splitSomething = True
-							break
+			for km in dbg.bw(first):
+				if km in self.kmers:		#km->s
+					[c_ID, c_i, c_B] = self.kmers[km]
+					c_L = len(self.contigs[c_ID][0])
+					if c_B and (c_i!=(c_L-self.k)):
+						if CS:
+							count = self.splitDict[c_ID,c_i+self.k]
+							if count==0:
+								self.splitDict[c_ID,c_i+self.k] += 1
+								return True
+						self.splitContig(c_ID,c_i+self.k)		#split after km
+						splitSomething = True
+			for km in dbg.bw(last_twin):	#km->twin(s)
+				if km in self.kmers:
+					[c_ID, c_i, c_B] = self.kmers[km]
+					c_L = len(self.contigs[c_ID][0])
+					if c_B and (c_i!=(c_L-self.k)):
+						if CS:
+							count = self.splitDict[c_ID,c_i+self.k]
+							if count==0:
+								self.splitDict[c_ID,c_i+self.k] += 1
+								return True
+						self.splitContig(c_ID,c_i+self.k)		#split after km
+						splitSomething = True
 		assert(splitSomething==False)
-
-	"""
-	def oldNewSplitOthers():
-		for km, [c_ID, c_i, c_B] in self.kmers.iteritems():
-			splitOnThis_km = False
-			if c_B:
-				if c_i!=0:
-					for y in dbg.bw(km):
-						if (y==last) or (y==first_twin):
-							#c = x_km_y og x ekki tómt
-							#twin(first)->km
-							#last->km
-							kmersToSplitOn[km] = [c_ID,c_i,c_B]
-							break
-							splitOnThis_km = True
-							#self.splitContig(c_ID, c_i+self.k-1)	#split before km
-							#self.splitOthers(s)#,doneContigs)
-							#return
-					if splitOnThis_km:
-						continue
-						
-				c_L = len(self.contigs[c_ID][0])
-				if c_i!=c_L-self.k:
-					for y in dbg.fw(km):
-						if (y==first) or (y==last_twin):
-							#c = x_km_y og y ekki tómt
-							#km->first
-							#km->twin(last)
-							kmersToSplitOn[km] = [c_ID,c_i,c_B]
-							break
-							#self.splitContig(c_ID, c_i+self.k)		#split after km
-							#self.splitOthers(s)#,doneContigs)
-							#return
-
-
-		for km, [c_ID, c_i, c_B] in kmersToSplitOn.iteritems():
-			if c_B:
-				if c_i!=0:
-					for y in dbg.bw(km):
-						if (y==last) or (y==first_twin):
-							#c = x_km_y og x ekki tómt
-							#twin(first)->km
-							#last->km
-							self.splitContig(c_ID, c_i+self.k-1)	#split before km
-							self.splitOthers(s)#,doneContigs)
-							return
-				c_L = len(self.contigs[c_ID][0])
-				if c_i!=c_L-self.k:
-					for y in dbg.fw(km):
-						if (y==first) or (y==last_twin):
-							#c = x_km_y og y ekki tómt
-							#km->first
-							#km->twin(last)
-							kmersToSplitOn[km] = [c_ID,c_i,c_B]
-							self.splitContig(c_ID, c_i+self.k)		#split after km
-							self.splitOthers(s)#,doneContigs)
-							return
-	"""
-
-	"""
-	def gamlaSplitOthers():
-			#print km, c_ID, c_i, c_B, c_i, c_i!=c_L-self.k
-			if c_i!=0:
-				#print "a non first km:", km
-				if helpers.canConn(last,km,True,True,self.k):
-					#print "We can conn from last="+str(last)+" to km="+str(km)
-					if c_B:
-						self.splitContig(c_ID, c_i+self.k-1)	#split before km 1
-					elif not c_B:
-						self.splitContig(c_ID, helpers.fix_i(c_i,c_L,self.k)+self.k-1)		#split after km 2
-					self.splitOthers(segment)
-					return
-			if c_i!=c_L-self.k:
-				#print "a non last km:", km
-				if helpers.canConn(km,first,True,True,self.k):
-					#print "We can conn from km="+str(km)+" to first="+str(first)
-					if c_B:
-						self.splitContig(c_ID, c_i+self.k)		#split after km 3
-					elif not c_B:
-						self.splitContig(c_ID, helpers.fix_i(c_i,c_L,self.k)+self.k-1)	#split before km 4
-					self.splitOthers(segment)
-					return
-	"""
+		return False
 
 	def splitContig(self,ID,i):
 		#helper function for splitOthers
@@ -1541,6 +1309,8 @@ class Graph:
 		if self.assertLegal:
 			assert self.isLegalGraph()
 
+		return ID0, ID1, c0, c1
+
 	def connectSegment(self,ID,segment=""):
 		#Helper function for addSegmentAldreadySplit
 		#Before:	ID is the ID of segment
@@ -1548,14 +1318,8 @@ class Graph:
 		#			The kmers from segment have been added to self.kmers
 		#			The graph is a legal DBG except for one thing:
 		#				segment has not been connected to the other contigs
-		#				(after this function finishes we need to run mergeSegment
-		#				to make sure this is a legal DBG)
-		#			Note: No contig needs to be split up further in order to make the
-		#				  graph a legal dBG
-		#After:		segment has been connected to the other contigs in the graph using
-		#			self.connect_a_to_b(aID,bID,A,B)
-		#			i.e. self.contigs[ID] = [segment,IN,OUT,0]
-		if segment == "":
+		#After:		segment has been connected to the other contigs in the graph
+		if segment=="":
 			[segment,IN,OUT,COV] = self.contigs[ID]
 		if self.printFunctionNames:
 			print "connectSegment(ID="+str(ID)+", segment="+str(segment)+")"
@@ -1568,43 +1332,23 @@ class Graph:
 		#	segment->N
 		#	segment->twin(N)
 		L = len(segment)
-		for y in dbg.fw(segment[L-self.k:]):
+		first = segment[0:self.k]
+		last = segment[L-self.k:]
+		for y in dbg.fw(last):
 			if y in self.kmers:
-				#Find the information we need about the neighbouring contig N where we've seen y before
 				[N_ID, N_i, N_B] = self.kmers[y]
-				[N, N_IN, N_OUT, N_COV] = self.contigs[N_ID]
-				N_L = len(N)
-
-				#Stop if y is not the first kmer in N (or twin(N))
-				if not N_i==0:
-					if not N_ID==ID:
-						print "about to throw an exception"
-						print "segment:", segment
-						print "segment[L-self.k:]:", segment[L-self.k:]
-						print list(dbg.fw(segment[L-self.k:]))
-						print "y [N_ID,N_i,N_B]:", y, [N_ID, N_i, N_B]
-						print "[N, N_IN, N_OUT, N_COV]:", [N, N_IN, N_OUT, N_COV]
-						raise Exception("We're not supposed to have to split any more contigs")
-					continue
-
-				#Now we know that either segment->N or segment->twin(N)
-				self.connect_a_to_b_ifNotAlreadyConnected(ID,N_ID,True,N_B)
+				if N_i==0:
+					self.connect_a_to_b_ifNotAlreadyConnected(ID,N_ID,True,N_B)
 
 		#Add connections of the form:
 		#	N->segment
 		#	twin(N)->segment
-		for y in dbg.bw(segment[0:self.k]):
+		for y in dbg.bw(first):
 			if y in self.kmers:
-				#Find the information we need about the neighbouring contig N where we've seen y before
 				[N_ID, N_i, N_B] = self.kmers[y]
-				[N, N_IN, N_OUT, N_COV] = self.contigs[N_ID]
-				N_L = len(N)
-
-				#Stop if y is not the last kmer in N (or twin(N))
-				if not N_i==N_L-self.k:
-					continue
-
-				self.connect_a_to_b_ifNotAlreadyConnected(N_ID,ID,N_B,True)
+				N = self.contigs[N_ID][0]
+				if N_i==len(N)-self.k:
+					self.connect_a_to_b_ifNotAlreadyConnected(N_ID,ID,N_B,True)
 
 		if self.assertLegal:
 			assert self.isLegalGraph()
@@ -1646,8 +1390,8 @@ class Graph:
 			[canMerge,a_ID,b_ID,A,B] = self.canMergeOUT(ID)
 
 		if count>maxCount:
-			self.printContigs()
-			print ID
+			#self.printContigs()
+			print ID, self.contigs[ID]
 			raise Exception("We can only merge OUT once if we dont flip and twice if we flip")
 
 		count = 0

@@ -33,47 +33,67 @@ def getTotals(G,theContigs=-1):
 
 def selectGenome(genomeName):
 	if genomeName=="t":
-		maxAddCovs = [5, 10, 15, 20, 30,float('inf')]
+		filters = [ \
+        (5,float('inf')), \
+		(10,12),(10,15),(10,20),(10,30),(10,float('inf')), \
+		(15,16),(15,17),(15,20),(15,25),(15,30),(15,float('inf')), \
+		(20,float('inf')), \
+		(30,float('inf')), \
+		(float('inf'),float('inf'))]
 	elif genomeName=="sa":
-		maxAddCovs = [5, 10, 15, 20, 30,float('inf')]
+		filters = [ \
+        (15,20),(15,30),(15,float('inf')), \
+		(20,30),(20,float('inf')), \
+		(30,float('inf')), \
+		(float('inf'),float('inf'))]
 	else:
 		raise Exception("The genomeName must be either 't' or 'sa'!")
-	return maxAddCovs
+	return filters
 
 if __name__ == "__main__":
 	genomeName = sys.argv[1]
 	k = int(sys.argv[2])
 	skipPrint = helpers.readSkipPrint(4)
-	maxAddCovs = selectGenome(genomeName)
+	filters = selectGenome(genomeName)
 	outDir = "Output/"+str(genomeName)
+
+	if not skipPrint:
+		print "Running whatIsMissing.py for genome="+str(genomeName)+":"
 
 	if not skipPrint:
 		print "Reading G from Ginf.txt:"
 	G = Graph.Graph(k,al=False)
-	G.createGraphFromFile(outDir+"/G"+str(maxAddCovs[-1])+".txt")
+	G.createGraphFromFile(outDir+"/G_inf_inf.txt")
 
 	if not skipPrint:
 		print "Analyzing the contigs in G:"
 	G.analyzeAllContigsInCollection()
 	totals_G = getTotals(G,-1)
 	perc_G = [x/float(len(G)) for x in totals_G]
-	helpers.writeTotalsAndPercToFile(outDir+"/G"+str(maxAddCovs[-1])+"_tot_perc.csv",totals_G,perc_G)
+	assert(filters[-1]==(float('inf'),float('inf')))
+	helpers.writeTotalsAndPercToFile(outDir+"/G_inf_inf_tot_perc.csv",totals_G,perc_G)
 
 	#For every maxAddCov x
 	#	Read Gx from Gx.txt
 	#	Create I_kmers as intersection of k-mers in G and Gx
 	#	Create I_ids as the set containing all contigs the k-mers in I_kmers occur in
-	for maxAddCov in maxAddCovs[0:-1]:
+	for MAC, MSC in filters[0:-1]:
+		gn = helpers.createGraphName(MAC,MSC,False,False)
+		#print gn
+
 		if not skipPrint:
-			print "\nA) Starting on maxAddCov="+str(maxAddCov)+":"
+			print "\nA) Starting on MAC="+str(MAC)+" and MSC="+str(MSC)+":"
 		#Create Gx, I_kmers and I_ids
 		Gx = Graph.Graph(k,al=False)
-		Gx.createGraphFromFile(outDir+"/G"+str(maxAddCov)+".txt")
+		if MSC==float('inf'):
+			Gx.createGraphFromFile(outDir+"/"+gn+".txt")
+		else:
+			Gx.createGraphFromFile(outDir+"/"+gn+".txt")
 		I_kmers = set(G.kmers.keys()) - set(Gx.kmers.keys())
 		assert(len(I_kmers)==len(G.kmers)-len(Gx.kmers))
 		I_ids = helpers.getIDsFromSetOfKmers(G,I_kmers)
 		if not skipPrint:
-			print "B) Done recreating G"+str(maxAddCov)+" I_kmers and I_ids for genome="+str(genomeName)
+			print "B) Done recreating "+gn+", I_kmers and I_ids"
 		
 		#Check for errors:
 		for km in I_kmers:
@@ -84,7 +104,7 @@ if __name__ == "__main__":
 		for km in G.kmers:
 			assert((km in I_kmers) or (km in Gx.kmers)), "All k-mers from G should either occur in I_kmers or Gx"
 		if not skipPrint:
-			print "C) Done checking for errors for genome="+str(genomeName)+" and maxAddCov="+str(maxAddCov)
+			print "C) Done checking for errors"
 
 		#Create I_kmerPairs so we only store either km or twin(km) for each km in I_kmers
 		I_kmerPairs = collections.defaultdict(int)
@@ -96,7 +116,7 @@ if __name__ == "__main__":
 		#Now we'll give iso, tip, bub ratings to every contig in Gx
 		Gx.analyzeAllContigsInCollection()
 		if not skipPrint:
-			print "D) Done assigning a rating to every contig in Gx for genome="+str(genomeName)+" and maxAddCov="+str(maxAddCov)
+			print "D) Done assigning a rating to every contig in Gx"
 		
 		#Compute percentages of iso, tip and bubbles for Gx and I_ids
 		totals_Gx = getTotals(Gx,-1)
@@ -104,12 +124,13 @@ if __name__ == "__main__":
 		perc_Gx = [x/float(len(Gx)) for x in totals_Gx]
 		perc_I = [x/float(len(I_ids)) for x in totals_I]
 
-		helpers.writeTotalsAndPercToFile(outDir+"/G"+str(maxAddCov)+"_tot_perc.csv",totals_Gx,perc_Gx)
-		helpers.writeTotalsAndPercToFile(outDir+"/G"+str(maxAddCov)+"d_tot_perc.csv",totals_I,perc_I)
+		helpers.writeTotalsAndPercToFile(outDir+"/"+gn+"_tot_perc.csv",totals_Gx,perc_Gx)
+		helpers.writeTotalsAndPercToFile(outDir+"/"+gn+"d_tot_perc.csv",totals_I,perc_I)
 		if not skipPrint:
-			print "E) Done printing the results from analyzeAllContigsInCollection to a file for genome="+str(genomeName)+" and maxAddCov="+str(maxAddCov)
-		leBarChart.createBarChart(maxAddCov,outDir,genomeName)
+			print "E) Done printing the results from analyzeAllContigsInCollection to a file"
+		leBarChart.createBarChart(outDir,genomeName,MAC,MSC)
 		if not skipPrint:
-			print "F Done creating the bar Chart for maxAddCov="+str(maxAddCov)
+			print "F Done creating the bar Chart"
 	if not skipPrint:	
 		print "Finished running whatIsMissing.py for genome="+genomeName
+

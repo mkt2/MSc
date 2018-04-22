@@ -18,11 +18,8 @@ import pathlib2
 #   covDict[maxAddCov][j] = line[j+1]
 #        0     1     2      3
 #Geymir COV, lenG, fracG, lenBF og fracBF fyrir G
-def createFigure(covDict,genomeLen,numReadsPerFile,numKmersPerRead,genome_dict,maxAddCov,figTitle,figName):
+def createFigure(covDict,genomeLen,numReadsPerFile,numKmersPerRead,genome_dict,maxAddCov,maxSplitCov,figTitle,figName):
     def toLogScale(myList,ratio_1_log_scale):
-        #print myList
-        #for x in myList:
-        #    print x, -log(1-x,10)
         return [ratio_1_log_scale if x==1 else -log(1-x,10) for x in myList]
 
     #Væri fínt að nefna þetta fall eitthvað meira lýsandi. 
@@ -42,50 +39,84 @@ def createFigure(covDict,genomeLen,numReadsPerFile,numKmersPerRead,genome_dict,m
         assert(P<1), "C="+str(C)+", P="+str(P)
         return P
 
+    #Teiknar inn línur fyrir Gx og Gxs
+    def addCurrent(key):
+        assert(key!=(float('inf'),float('inf')))
+        maxAddCov = key[0]
+        maxSplitCov = key[1]
+
+        #Plot Gx on top plot:
+        ax1.plot(COV,covDict[(maxAddCov,float('inf'))][1],"r-",label='G'+str(maxAddCov))
+
+        #Plot Gx on bottom plot:
+        Gx_frac_log = [ratio_1_log_scale if x==1 else -log(1-x,10) for x in covDict[(maxAddCov,float('inf'))][2]]
+        ax2.plot(COV,Gx_frac_log,"r-",label='G'+str(maxAddCov))
+
+        if maxSplitCov!=float('inf'):
+            #Plot Gxs on top plot:
+            ax1.plot(COV,covDict[key][1],"g-",label='G'+str(maxAddCov)+"s"+str(maxSplitCov))
+
+            #Plot Gxs on bottom plot:
+            Gxs_frac_log = [ratio_1_log_scale if x==1 else -log(1-x,10) for x in covDict[key][2]]
+            ax2.plot(COV,Gxs_frac_log,"g--",label='G'+str(maxAddCov)+"s"+str(maxSplitCov))
+
+        #Setjum tölur inn á gröfin við hliðina á línunum fyrir Gx og Gxs:
+        vars_x1 = [covDict[(float('inf'),float('inf'))][1],covDict[key][1]]
+        if maxSplitCov!=float('inf'):
+            vars_x1.append(covDict[(maxAddCov,float('inf'))][1])
+        vars_x2 = [G_BF_frac_log,G_frac_log,Gx_frac_log]
+        for var in vars_x1:
+            ax1.annotate(' %s' % format(max(var),','), xy=(0,0), xytext=(max(COV),max(var)))
+        for var in vars_x2:
+            ax2.annotate(' %s' % format(float('{:.2f}'.format(max(var),','))), xy=(0,0), xytext=(max(COV),max(var)))
+
     #Initialize the plot:
     fig, (ax1,ax2) = plt.subplots(2,1)
-    
-    COV = covDict[float('inf')][0]
+    COV = covDict[(float('inf'),float('inf'))][0]
 
-    #Plot on the subplot above
+    #Plot Ginf on top plot
     ax1.axhline(genomeLen,label="Genome")
-    ax1.plot(COV,covDict[float('inf')][3],"k-",label='BFinf')
-    ax1.plot(COV,covDict[float('inf')][1],"k--",label='Ginf')
+    ax1.plot(COV,covDict[(float('inf'),float('inf'))][3],"m-",label='BFinf')
+    ax1.plot(COV,covDict[(float('inf'),float('inf'))][1],"k-",label='Ginf')
     x1,x2,y1,y2 = ax1.axis()
-    ax1.axis((x1,max(COV),0,max(covDict[float('inf')][1])*1.3))
-    ax1.plot(COV,covDict[maxAddCov][1],"r--",label='G'+str(maxAddCov))
+    ax1.axis((x1,max(COV),0,max(covDict[(float('inf'),float('inf'))][1])*1.3))
+    #ax1.plot(COV,covDict[maxAddCov][1],"r--",label='G'+str(maxAddCov))
     
-    #Plot on the subplot to the right:
+    #Plot Ginf on bottom plot:
     ratio_1_log_scale = -log(1-0.9999,10)
+    ratio_1_log_scale_2 = -log(1-0.99,10)
     ax2.axhline(ratio_1_log_scale,label="Fraction of 99.99%")
-    #ax2.axhline(-log(1-0.999,10),label="Fraction of 99.9%")	    #XX
-    ax2.axhline(-log(1-0.99,10),label="Fraction of 99%")	    #XX
-    G_BF_frac_log = toLogScale(covDict[float('inf')][4],ratio_1_log_scale)
-    G_frac_log = toLogScale(covDict[float('inf')][2],ratio_1_log_scale)
-    ax2.plot(COV,G_BF_frac_log,"k-",label="BF frac")
-    ax2.plot(COV,G_frac_log,"k--",label='G frac')
+    ax2.axhline(ratio_1_log_scale_2,label="Fraction of 99%")
+    G_BF_frac_log = toLogScale(covDict[(float('inf'),float('inf'))][4],ratio_1_log_scale)
+    G_frac_log = toLogScale(covDict[(float('inf'),float('inf'))][2],ratio_1_log_scale)
+    ax2.plot(COV,G_BF_frac_log,"m-",label="BF frac")
+    ax2.plot(COV,G_frac_log,"k-",label='G frac')
     x1,x2,y1,y2 = ax2.axis()
     ax2.axis((x1,max(COV),y1,y2))
     #Bætum lw við myndirnar:
     G_lw = [lw(C,genomeLen) for C in COV]
     G_lw_log = toLogScale(G_lw,ratio_1_log_scale)
-    ax2.plot(COV,G_lw_log,"g-",label='G.lw')
-    Gx_frac_log = [ratio_1_log_scale if x==1 else -log(1-x,10) for x in covDict[maxAddCov][2]]
-    ax2.plot(COV,Gx_frac_log,"r--",label='G'+str(maxAddCov))
+    ax2.plot(COV,G_lw_log,"y-",label='G.lw')
+
+    #Plot Gx and Gxs:
+    key = (maxAddCov,maxSplitCov)
+    addCurrent(key)
+
+    #Plot Gx on bottom plot:
+    #Gx_frac_log = [ratio_1_log_scale if x==1 else -log(1-x,10) for x in covDict[maxAddCov][2]]
+    #ax2.plot(COV,Gx_frac_log,"r--",label='G'+str(maxAddCov))
 
     #Setjum tölur inn á gröfin við hliðina á línunum:
+    #G:
     ax1.annotate(' %s' % format(genomeLen,','), xy=(0,0), xytext=(max(COV),genomeLen))
     ax2.annotate(' %s' % format(float('{:.2f}'.format(ratio_1_log_scale,','))), xy=(0,0), xytext=(max(COV),ratio_1_log_scale))
-    #if maxAddCov==-1:
-    #    vars_x1 = [self.num_kmers_InGraph_noMaxCov]
-    #    vars_x2 = [BF_ratio_noMaxCov_log,G_ratio_noMaxCov_log]
-    #else:
-    vars_x1 = [covDict[float('inf')][1],covDict[maxAddCov][1]]
-    vars_x2 = [G_BF_frac_log,G_frac_log,Gx_frac_log]
-    for var in vars_x1:
-        ax1.annotate(' %s' % format(max(var),','), xy=(0,0), xytext=(max(COV),max(var)))
-    for var in vars_x2:
-        ax2.annotate(' %s' % format(float('{:.2f}'.format(max(var),','))), xy=(0,0), xytext=(max(COV),max(var)))
+    ax2.annotate(' %s' % format(float('{:.2f}'.format(ratio_1_log_scale_2,','))), xy=(0,0), xytext=(max(COV),ratio_1_log_scale_2))
+    #vars_x1 = [covDict[float('inf')][1],covDict[maxAddCov][1]]
+    #vars_x2 = [G_BF_frac_log,G_frac_log,Gx_frac_log]
+    #for var in vars_x1:
+    #    ax1.annotate(' %s' % format(max(var),','), xy=(0,0), xytext=(max(COV),max(var)))
+    #for var in vars_x2:
+    #    ax2.annotate(' %s' % format(float('{:.2f}'.format(max(var),','))), xy=(0,0), xytext=(max(COV),max(var)))
 
     #Set commas on the y-axis in the above plot:
     ax1.get_yaxis().set_major_formatter(
@@ -107,6 +138,7 @@ def createFigure(covDict,genomeLen,numReadsPerFile,numKmersPerRead,genome_dict,m
 
     fig.suptitle(figTitle, y=1.01)
     fig.savefig(figName, bbox_inches='tight')
+    plt.close(fig)
 
 if __name__ == "__main__":
     genomeName = sys.argv[1]
@@ -128,9 +160,28 @@ if __name__ == "__main__":
     
     #Búum til myndirnar:
     covDict = helpers.readCovDictFromFile(fileName=outDir+"/covDict.txt")
-    maxAddCovs= covDict.keys()
+    keys = covDict.keys()
+    print keys
+    maxAddCovs = [x[0] for x in keys]
+    maxSplitCovs = [x[1] for x in keys]
+    #print keys
+    #print maxAddCovs
+    #print maxSplitCovs
     maxAddCovs.remove(float('inf'))
+    print "Creating figures for every Gx"
     for maxAddCov in maxAddCovs:
-        figName = outDir+"/"+genomeName+"_maxAddCov"+str(maxAddCov)+".png"
-        figTitle = genomeName+". maxAddCov="+str(maxAddCov)
-        createFigure(covDict,genomeLen,numReadsPerFile,numKmersPerRead,genome_dict,maxAddCov,figTitle,figName)
+        maxSplitCov = float('inf')
+        figName = outDir+"/"+genomeName+"_"+str(maxAddCov)+"_inf"+".png"
+        figTitle = genomeName+". MAC="+str(maxAddCov)
+        createFigure(covDict,genomeLen,numReadsPerFile,numKmersPerRead,genome_dict,maxAddCov,maxSplitCov,figTitle,figName)
+
+    print "Creating figures for every Gxs"
+    for (MAC,MSC) in covDict.keys():
+        if MAC==float('inf'):
+            continue
+        if MSC==float('inf'):
+            continue
+        figName = outDir+"/"+genomeName+"_"+str(MAC)+"_"+str(MSC)+".png"
+        #figName = outDir+"/"+genomeName+"_maxAddCov"+str(maxAddCov)+"_maxSplitCov"+str(maxSplitCov)+".png"
+        figTitle = genomeName+". MAC="+str(MAC)+", MSC="+str(MSC)
+        createFigure(covDict,genomeLen,numReadsPerFile,numKmersPerRead,genome_dict,MAC,MSC,figTitle,figName)

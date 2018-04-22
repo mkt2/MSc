@@ -146,6 +146,9 @@ def BFAdder(fn,k,BF,G,maxAddCov,maxSplitCov,read_len,genome_len,sampleAtReadsNum
             #assert(G.isLegalDBG())
         COV = segmentCount * covFactor
 
+    print 'segmentCount='+str(segmentCount)+" after the loop"
+    print 'read_len='+str(read_len)
+    print 'read_len*2='+str(read_len*2)
     #Final measurement when finished running through the last file:
     if printProgress:
         print "measureIndex="+str(measureIndex)+" after finishing the loop"

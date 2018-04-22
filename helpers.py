@@ -424,7 +424,7 @@ def printRuntimesToFile(genomeName, filters, runTimes):
 #----------------------------------------------------------------------------
 def segments(fn,k):
     #yields segments from the reads, one segment at a time
-    segmentCount = 0
+    segmentCount = -1
     for f in fn:
         h = open(f, "rU")
         for lineNr,line in enumerate(h):

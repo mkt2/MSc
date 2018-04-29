@@ -33,8 +33,8 @@ if __name__ == "__main__":
     G = Graph.Graph(k,al=False)
     G.createGraphFromFile(outDir+"/G_inf_inf.txt")
     G.saveAs_GFA_toFile(outDir+"/G_inf_inf.GFA")
-    print "contigsInG:", len(G)
-    print "kmersInG:  ", G.numKmerPairs()
+    print "numContigsInG:", len(G)
+    print "numKmerPairsInG:  ", G.numKmerPairs()
 
     #Create G_naive
     print "Starting on G_naive using a BF for filtering singletons:"

@@ -63,7 +63,7 @@ def printN50ToFile(filters,N50L,L50L,outDir):
     f = open(fileName, 'w')
     #for i in range(0,len(MCL)):
     for i, (MAC,MSC) in enumerate(filters):
-        gn = helpers.createGraphName(MAC,MSC,False,True)
+        gn = helpers.createGraphName_tex(MAC,MSC,True)
         f.write(gn+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
         #if MCL[i]==-1:
         #    f.write("$\\infty$"+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
@@ -71,6 +71,7 @@ def printN50ToFile(filters,N50L,L50L,outDir):
         #    f.write(str(MCL[i])+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
     f.close()
 
+"""
 def selectGenome(genomeName):
 	if genomeName=="t":
 		filters = [ \
@@ -89,6 +90,7 @@ def selectGenome(genomeName):
 	else:
 		raise Exception("The genomeName must be either 't' or 'sa'!")
 	return filters
+"""
 
 if __name__ == "__main__":
     #Inputs
@@ -97,14 +99,17 @@ if __name__ == "__main__":
 
     #Define some stuff
     outDir = "Output/"+genomeName
-    filters = selectGenome(genomeName)
+    #filters = selectGenome(genomeName)
+    covDict = helpers.readCovDictFromFile(fileName=outDir+"/covDict.txt")
+    filters = covDict.keys()
+    filters.sort(key=lambda tup: (tup[0],tup[1]), reverse=False)
     N50_list = [-2]*len(filters)
     L50_list = [-2]*len(filters)
 
     #Find N50 for each maxAddCov
     for i,(MAC,MSC) in enumerate(filters):
         Gx = Graph.Graph(k,al=False)
-        fileName = helpers.createGraphName(MAC,MSC,False,False)+".txt"
+        fileName = helpers.createGraphName(MAC,MSC)+".txt"
         #fileName = "/G"+str(maxAddCov)+".txt"
         Gx.createGraphFromFile(outDir+"/"+fileName)
         N50,N50_ID,N50_c,L50 = findN50(Gx,k)

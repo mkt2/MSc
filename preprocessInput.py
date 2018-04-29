@@ -11,7 +11,7 @@ import sys
 def doGenomeStuff(genomeName,k,genomeFile):
     kmersInGenome = helpers.createKmerDictFromGenomeFile(k,genomeFile)
     genomeFile = "Output/"+str(genomeName)+"/kmers_genome.txt"
-    print "Printing to", genomeFile
+    #print "Printing to", genomeFile
     kmer_file = genomeFile
     f = open(kmer_file, 'w')
     for km in kmersInGenome:
@@ -28,8 +28,9 @@ def doReadStuff(genomeName,k,readFiles):
     kmer_file = "Output/"+str(genomeName)+"/kmers_reads.txt"
     numReadsPerFile = int(helpers.file_len(readFiles[0]))/4
     numKmersInReads = len(kmersInReads)
+    #print "bla",numReadsPerFile,numKmersInReads
 
-    print "Printing to", kmer_file
+    #print "Printing to", kmer_file
     f = open(kmer_file, 'w')
     for km in kmersInReads:
         f.write(str(km)+"\n")
@@ -87,9 +88,12 @@ def writeGenomeInfoToFile(genomeName,k,p=0.01):
     #Let the helper functions do the hard work:
     print "Starting on doGenomeStuff"
     numKmersInGenome                                                      = doGenomeStuff(genomeName,k,genomeFile)
+    #print numKmersInGenome
     print "Starting on doReadStuff"
     numReadsPerFile,numKmersInReads,numKmersInReads_twice,numKmersPerRead = doReadStuff(genomeName,k,readFiles)
+    #print numReadsPerFile,numKmersInReads,numKmersInReads_twice,numKmersPerRead
     print "Starting on doReadStuff_usingBF"
+    #print genomeName,k,readFiles,p,numKmersInReads
     numKmersInReads_twice_BF, BF_ratio_1_vs_0                             = doReadStuff_usingBF(genomeName,k,readFiles,p,numKmersInReads)
 
     #Print the results to files:

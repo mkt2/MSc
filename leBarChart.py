@@ -3,7 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def createBarChart(outDir,genomeName,MAC,MSC):
-    gn = helpers.createGraphName(MAC,MSC,False,False)
+    gn = helpers.createGraphName(MAC,MSC)
+    gn_tex = helpers.createGraphName_tex(MAC,MSC,False)
+    #print gn
+    #print gn_tex
     #Read the data from the files:
     G_tot, G_per = helpers.readTotalsAndPercFromFile(outDir+"/G_inf_inf_tot_perc.csv")
     Gx_tot, Gx_per = helpers.readTotalsAndPercFromFile(outDir+"/"+gn+"_tot_perc.csv")
@@ -18,6 +21,8 @@ def createBarChart(outDir,genomeName,MAC,MSC):
 
     #Initialize the plot. We start with the left subplot:
     fig, (ax1,ax2) = plt.subplots(1,2)
+    plt.rc('text', usetex=True)
+    plt.rc('font', family='serif')
 
     #Define colors:
     color_iso =       '#5A9BD3'
@@ -51,28 +56,28 @@ def createBarChart(outDir,genomeName,MAC,MSC):
     ax1.xaxis.set_ticks([0.2,0.6])
     labels = [item.get_text() for item in ax1.get_xticklabels()]
     labels[0] = 'G'
-    labels[1] = gn
+    labels[1] = gn_tex
     ax1.set_xticklabels(labels)
     
     ax1.set_ylim(0,sum(G_tot)*1.01)
-    ax1.set_ylabel('Number of contigs')
-    ax1.set_title('The contigs in G and '+gn)
+    ax1.set_ylabel('Number of k-mers')
+    ax1.set_title('G and '+gn_tex)
     handles, labels = ax2.get_legend_handles_labels()
     ax1.legend(handles[::-1], labels[::-1], loc='upper right', prop={'size': 13})
 
     ax2.set_xlim(0,1,1)
     ax2.xaxis.set_ticks([0.2])
     labels = [item.get_text() for item in ax2.get_xticklabels()]
-    labels[0] = gn+"d"
+    labels[0] = 'G-'+gn_tex
     ax2.set_xticklabels(labels)
     
     ax2.set_ylim(0,sum(Gd_tot)*1.01)
-    ax2.set_title('The contigs in '+gn+"d")
+    ax2.set_title('G-'+gn_tex)
     handles, labels = ax2.get_legend_handles_labels()
     ax2.legend(handles[::-1], labels[::-1], loc='upper right', prop={'size': 13})
   
     #Save and show the figure
-    fig.suptitle("A visual representation of G, "+gn+", and "+gn+"d for genome="+genomeName)
+    fig.suptitle("A visual representation of G, "+gn_tex+", and "+"G-"+gn_tex+" for genome="+genomeName)
     fig.savefig(outDir+"/"+genomeName+"_wim_"+gn+".png", bbox_inches='tight')
     #plt.show()
 

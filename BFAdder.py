@@ -33,13 +33,13 @@ def newDictValues(COV,G,BF,maxAddCov,genome_dict,genome_len):
     else:
         return [G_len, G_frac]
 
-def updateDict(COV,covDict,maxAddCov,maxSplitCov,values):
+def updateDict(COV,covDict,MAC,MSC,values):
     #values = [G_len,G_frac,BF_len,BF_frac]
     #covDict[maxAddCov][0][i] = COV
-    key = (maxAddCov,maxSplitCov)
+    key = (MAC,MSC)
     covDict[key][0].append(COV)
     assert(len(covDict[key])>1)
-    if maxAddCov==float('inf'):
+    if MAC==float('inf'):
         assert(len(values)==4)
         for j in [1,2,3,4]:
             covDict[key][j].append(values[j-1])
@@ -47,6 +47,40 @@ def updateDict(COV,covDict,maxAddCov,maxSplitCov,values):
         assert(len(values)==2)
         for j in [1,2]:
             covDict[key][j].append(values[j-1])
+
+def printCurrentKeyToFile(covDict,key,fileName):
+    f = open(fileName, 'a')
+    #for key, values in covDict.iteritems():
+    values = covDict[key]
+    MAC = key[0]
+    MSC = key[1]
+    #values = [COV, G_len,G_frac,BF_len,BF_frac] fyrir G (maxAddCov = float('inf'))
+    #values = [COV, G_len,G_frac] fyrir sérhvert Gx
+    if MAC == float('inf'):
+        assert(len(values)==5)
+        f.write(str(key)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+";"+str(values[3])+";"+str(values[4])+"\n")
+    else:
+        assert(len(values)==3)
+        f.write(str(key)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+"\n")
+    f.close()
+
+
+def printKeyToFile(key,COV,values,fileName):
+    f = open(fileName, 'a')
+    #for key, values in covDict.iteritems():
+    MAC = key[0]
+    MSC = key[1]
+    #values = [G_len,G_frac,BF_len,BF_frac] fyrir G (maxAddCov = float('inf'))
+    #values = [G_len,G_frac] fyrir sérhvert Gx
+    if MAC == float('inf'):
+        assert(len(values)==4)
+        printString = str(key)+";"+str(COV)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+";"+str(values[3])+"\n"
+    else:
+        assert(len(values)==2), "len(values)="+str(len(values))
+        printString = str(key)+";"+str(COV)+";"+str(values[0])+";"+str(values[1])+"\n"
+    f.write(printString)
+    print printString
+    f.close()
 
 def naive_createDict(fn,k):
     #Creates a dict, kd, storing every k-mer from the reads
@@ -159,20 +193,24 @@ def BFAdder(fn,k,BF,G,maxAddCov,maxSplitCov,read_len,genome_len,sampleAtReadsNum
 def selectGenome(genomeName):
     if genomeName=="t":
         filters = [ \
+        (float('inf'),5),(float('inf'),10),(float('inf'),20), #(float('inf'),2)\ 
         (5,float('inf')), \
-		(10,12),(10,15),(10,20),(10,30),(10,float('inf')), \
-		(15,16),(15,17),(15,20),(15,25),(15,30),(15,float('inf')), \
+        (10,12),(10,15),(10,float('inf')), #fæ error í merge fyrir (10,11)\
+		(15,16),(15,20),(15,float('inf')), \
 		(20,float('inf')), \
 		(30,float('inf')), \
+        (15,10),(20,15),(30,20), \
 		(float('inf'),float('inf'))]
         fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
         numberOfKmers = 8000000
     elif genomeName=="sa":
         filters = [ \
-        (15,20),(15,30),(15,float('inf')), \
-		(20,30),(20,22),(20,float('inf')), \
+        (15,16),(15,20),(15,float('inf')), \
+		(20,21),(20,25),(20,float('inf')), \
 		(30,float('inf')), \
-		(float('inf'),float('inf'))]
+        (float('inf'),float('inf')), \
+        (15,10),(20,15),(30,20), \
+		]
         fn = ["Input/Staphylococcus_aureus/frag_1.fastq", "Input/Staphylococcus_aureus/frag_2.fastq"]
         numberOfKmers = 100000000
     else:
@@ -183,13 +221,7 @@ def selectGenome(genomeName):
 #Need to run preprocessInput.py before running this file
 if __name__ == "__main__":
     genomeName = sys.argv[1]
-    #maxAddCovs, maxSplitCovs, fn, numberOfKmers = selectGenome(genomeName)
     filters, fn, numberOfKmers = selectGenome(genomeName)
-    #numGraphs = 0
-    #for x in maxSplitCovs:
-    #    for y in x:
-    #        numGraphs += 1
-    #print "numGraphs:", numGraphs
     numGraphs = len(filters)
     runTimes = [-1]*numGraphs
     pfn = False
@@ -216,7 +248,7 @@ if __name__ == "__main__":
     sampleAtReadsNumber = range(0,totNumberOfReads-sampleEvery,sampleEvery)
     if (totNumberOfReads%(NoM-1))!=0:
         sampleAtReadsNumber.append(totNumberOfReads+1)
-    print "totNumberOfReads", totNumberOfReads
+    print "totNumberOfReads:", totNumberOfReads
     print sampleAtReadsNumber, len(sampleAtReadsNumber)
 
     #covDict geymir upplýsingar fyrir myndirnar fyrir sérhvert maxAddCov
@@ -234,9 +266,14 @@ if __name__ == "__main__":
     start = time.time()
     #Keyrum BF_counter fyrir sérhvert maxAddCov og tökum tímana
     start = time.time()
-    for i, (MAC,MSC) in enumerate(filters):
-        #def createGraphName(maxAddCov,maxSplitCov,withSpaces=False,latexFormat=True):
-        gn = helpers.createGraphName(MAC,MSC,False,False)
+    fileName=outDir+"/covDict.txt"
+    try:
+        os.remove(fileName)
+    except OSError:
+        pass
+    for i, key in enumerate(filters):
+        (MAC,MSC) = key
+        gn = helpers.createGraphName(MAC,MSC)
         print "Starting on gn="+gn+":"
         start_i = time.time()
         print "Initializing an empty bloom filter and graph"
@@ -247,6 +284,8 @@ if __name__ == "__main__":
         print "Running BFAdder:"
         for COV, dictValues in BFAdder(fn,k,BF,theGraph,MAC,MSC,numKmersPerRead,genomeLen,sampleAtReadsNumber,pfn,printProgress):
             updateDict(COV,covDict,MAC,MSC,dictValues)
+            #printKeyToFile(key,COV,dictValues,fileName)
+        printCurrentKeyToFile(covDict,key,fileName)
         timeInSeconds = int(time.time()-start_i)
         runTimes[i] = timeInSeconds
         #print "Done creating "+gn
@@ -257,9 +296,13 @@ if __name__ == "__main__":
         print "Finished creating "+gn+" and saving it to "+gn_f+". Time: "+helpers.returnTime(timeInSeconds)
         print "-------------------------------------------------------\n"
 	
+    #print "About to print covDict to fileName="+outDir+"/covDict.txt"
+    #helpers.printCovDictToFile(covDict,fileName=outDir+"/covDict.txt")
+
+    print "About to print runTimes to file"
+    for i, t in enumerate(runTimes):
+        print i,filters[i],t
     helpers.printRuntimesToFile(genomeName, filters, runTimes)
-    print "About to print covDict to fileName="+outDir+"/covDict.txt"
-    helpers.printCovDictToFile(covDict,fileName=outDir+"/covDict.txt")
     print "Finished running BFAdder.py on genome="+str(genomeName)
     print "Total time: "+helpers.returnTime(int(time.time()-start))
 

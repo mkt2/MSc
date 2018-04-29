@@ -7,7 +7,12 @@ import time
 import sys
 import leBarChart
 
-def getTotals(G,theContigs=-1):
+#Fram að 24. apríl var þetta að skila fjölda contiga
+#sem eru iso, tip, bub3, bub4 eða ekkert af þessu
+
+#Frá og með 24. apríl skilar þetta heildarfjölda k-mera
+#í umræddum contigum
+def getTotals(G,k,theContigs=-1):
 	if theContigs==-1:
 		theContigs = G.contigs.keys()
 	tot_iso = 0
@@ -16,46 +21,61 @@ def getTotals(G,theContigs=-1):
 	tot_bub4 = 0
 	tot_non = 0
 	for c_ID in theContigs:
+		[c,c_IN,c_OUT,c_COV] = G.contigs[c_ID]
 		R = G.degrees[c_ID][2]
 		if R==0:
-			tot_non += 1
+			tot_non += helpers.cLen(c,k)
 		elif R==1:
-			tot_iso += 1
+			tot_iso += helpers.cLen(c,k)
 		elif R==2:
-			tot_tip += 1
+			tot_tip += helpers.cLen(c,k)
 		elif R==3:
-			tot_bub3 += 1
+			tot_bub3 += helpers.cLen(c,k)
 		elif R==4:
-			tot_bub4 += 1
+			tot_bub4 += helpers.cLen(c,k)
 		else:
 			raise Exception("Illegal value for R")
 	return [tot_iso,tot_tip,tot_bub3,tot_bub4,tot_non]
 
+"""
 def selectGenome(genomeName):
 	if genomeName=="t":
+		#filters = [(5,float('inf')),(float('inf'),float('inf'))]
 		filters = [ \
         (5,float('inf')), \
-		(10,12),(10,15),(10,20),(10,30),(10,float('inf')), \
-		(15,16),(15,17),(15,20),(15,25),(15,30),(15,float('inf')), \
+        (10,12),(10,15),(10,float('inf')), #fæ error í merge fyrir (10,11)\
+		(15,16),(15,20),(15,float('inf')), \
 		(20,float('inf')), \
 		(30,float('inf')), \
+        (15,10),(20,15),(30,20), \
 		(float('inf'),float('inf'))]
 	elif genomeName=="sa":
 		filters = [ \
-        (15,20),(15,30),(15,float('inf')), \
-		(20,30),(20,float('inf')), \
+        (15,16),(15,20),(15,float('inf')), \
+		(20,21),(20,25),(20,float('inf')), \
 		(30,float('inf')), \
+        (15,10),(20,15),(30,20), \
 		(float('inf'),float('inf'))]
 	else:
 		raise Exception("The genomeName must be either 't' or 'sa'!")
 	return filters
+"""
+
+def totalToPerc(Graph,totals,numKmers=-1):
+	if numKmers==-1:
+		return [x/float(Graph.numKmerPairs()) for x in totals]
+	else:
+		return [x/float(numKmers) for x in totals]
 
 if __name__ == "__main__":
 	genomeName = sys.argv[1]
 	k = int(sys.argv[2])
 	skipPrint = helpers.readSkipPrint(4)
-	filters = selectGenome(genomeName)
 	outDir = "Output/"+str(genomeName)
+	#filters = selectGenome(genomeName)
+	covDict = helpers.readCovDictFromFile(fileName=outDir+"/covDict.txt")
+	filters = covDict.keys()
+	filters.sort(key=lambda tup: (tup[0],tup[1]), reverse=False)
 
 	if not skipPrint:
 		print "Running whatIsMissing.py for genome="+str(genomeName)+":"
@@ -68,9 +88,10 @@ if __name__ == "__main__":
 	if not skipPrint:
 		print "Analyzing the contigs in G:"
 	G.analyzeAllContigsInCollection()
-	totals_G = getTotals(G,-1)
-	perc_G = [x/float(len(G)) for x in totals_G]
-	assert(filters[-1]==(float('inf'),float('inf')))
+	totals_G = getTotals(G,k,-1)
+	#perc_G = [x/float(G.numKmerPairs()) for x in totals_G]
+	perc_G = totalToPerc(G,totals_G)
+	assert(filters[-1]==(float('inf'),float('inf'))), str(filters)
 	helpers.writeTotalsAndPercToFile(outDir+"/G_inf_inf_tot_perc.csv",totals_G,perc_G)
 
 	#For every maxAddCov x
@@ -78,7 +99,7 @@ if __name__ == "__main__":
 	#	Create I_kmers as intersection of k-mers in G and Gx
 	#	Create I_ids as the set containing all contigs the k-mers in I_kmers occur in
 	for MAC, MSC in filters[0:-1]:
-		gn = helpers.createGraphName(MAC,MSC,False,False)
+		gn = helpers.createGraphName(MAC,MSC)
 		#print gn
 
 		if not skipPrint:
@@ -119,10 +140,16 @@ if __name__ == "__main__":
 			print "D) Done assigning a rating to every contig in Gx"
 		
 		#Compute percentages of iso, tip and bubbles for Gx and I_ids
-		totals_Gx = getTotals(Gx,-1)
-		totals_I = getTotals(G,I_ids)
-		perc_Gx = [x/float(len(Gx)) for x in totals_Gx]
-		perc_I = [x/float(len(I_ids)) for x in totals_I]
+		totals_Gx = getTotals(Gx,k,-1)
+		totals_I = getTotals(G,k,I_ids)
+		#perc_Gx = [x/float(len(Gx)) for x in totals_Gx]
+		perc_Gx = totalToPerc(Gx,totals_Gx)
+		#perc_I = [x/float(len(I_ids)) for x in totals_I]
+		numKmersInI_ids = 0
+		for c_ID in I_ids:
+			[c,c_IN,c_OUT,c_COV] = G.contigs[c_ID]
+			numKmersInI_ids += helpers.cLen(c,k)
+		perc_I = totalToPerc(I_ids,totals_I,numKmersInI_ids)
 
 		helpers.writeTotalsAndPercToFile(outDir+"/"+gn+"_tot_perc.csv",totals_Gx,perc_Gx)
 		helpers.writeTotalsAndPercToFile(outDir+"/"+gn+"d_tot_perc.csv",totals_I,perc_I)

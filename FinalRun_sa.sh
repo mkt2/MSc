@@ -1,8 +1,8 @@
 #!/bin/bash
 #coding:utf8
-#python preprocessInput.py sa 31
+python preprocessInput.py sa 31
 printf "\n---BFAdder:---\n"
-#python BFAdder.py sa
+python BFAdder.py sa
 printf "\n---BFAdderFigures:---\n"
 python BFAdderFigures.py sa
 printf "\n---whatIsMissing:---\n"
@@ -12,7 +12,7 @@ python N50.py sa 31
 printf "\npercTable:\n"
 python percTable.py sa
 printf "\n---exploreWithBandage:---\n"
-#python exploreWithBandage.py sa 31             <---naive sprengir minnid
+python exploreWithBandage.py sa 31             #<---naive sprengir minnid
 #---exploreWithBandage:---
 #Starting on G
 #contigsInG: 817316

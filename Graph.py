@@ -112,14 +112,14 @@ class Graph:
 	#--------------------functions for storing graphs in files-----------------
 	#--------------------------------------------------------------------------
 	def printToFile(self,fileName):
-		f = open(fileName, 'w')
-		f.write(str(self.k)+"\n")
-		f.write(str(self.ID)+"\n")
-		f.write(str(len(self))+"\n")
-		f.write("ID;CONTIG;IN;OUT;COV\n")
+		f2 = open(fileName, 'w')
+		f2.write(str(self.k)+"\n")
+		f2.write(str(self.ID)+"\n")
+		f2.write(str(len(self))+"\n")
+		f2.write("ID;CONTIG;IN;OUT;COV\n")
 		for ID, [c,IN,OUT,COV] in self.contigs.iteritems():	
-			f.write(str(ID)+";"+str(c)+";"+str(IN)+";"+str(OUT)+";"+str(COV)+"\n")
-		f.close()
+			f2.write(str(ID)+";"+str(c)+";"+str(IN)+";"+str(OUT)+";"+str(COV)+"\n")
+		f2.close()
 	
 	def createGraphFromFile(self,fileName):
 		#Before:	The file is of the correct form
@@ -729,8 +729,8 @@ class Graph:
 		#if self.printIsLegal:
 		#	print "isLegal_merge()"
 		for ID, [c,IN,OUT,COV] in self.contigs.iteritems():
-			[canMerge1,a_ID,b_ID,A,B] = self.canMergeOUT(ID)
-			[canMerge2,a_ID,b_ID,A,B] = self.canMergeIN(ID)
+			canMerge1 = self.canMergeOUT(ID)
+			canMerge2 = self.canMergeIN(ID)
 			if canMerge1 or canMerge2:
 				if self.printIsLegal:
 					print "isLegal_merge returning False"
@@ -1353,12 +1353,12 @@ class Graph:
 		if self.assertLegal:
 			assert self.isLegalGraph()
 
-	def mergeSegment(self, ID):
+	def mergeSegment(self, c_ID):
 		#Helper function for addSegmentAldreadySplit
-		#Before:	ID is the ID of segment
-		#			The graph is a legal DBG except we might need to merge segment
+		#Before:	c_ID is the c_ID of C
+		#			The graph is a legal DBG except we might need to merge C
 		#			with it's connections
-		#After:		segment has been merged with it's neighbours wherever possible.
+		#After:		C has been merged with it's neighbours wherever possible.
 		#			The graph is a legal DBG
 		#			Note: We need to make sure that the INs and OUTs of new_c have
 		#			new_ID instead of ID/N_ID in their INs / OUTs
@@ -1367,158 +1367,132 @@ class Graph:
 		#	if we flipped the contig when merge-ing it will become an
 		#	OUT connection. Therefore we don't want to throw an exception
 		#	in this case (the error discovered 22.03.2017)
-		assert ID in self.contigs, "ID must be the ID of a contig in the graph"
+		assert c_ID in self.contigs, "c_ID must be the ID of a contig in the graph"
 		if self.printFunctionNames:
-			print "mergeSegment(ID="+str(ID)+")"
+			print "mergeSegment(c_ID="+str(c_ID)+")"
 		if self.printStatus:
 			self.printContigs("inside mergeSegment")
 		if self.assertLegal:
 			assert self.isLegalGraph()
 
-		count = 0
-		maxCount = 1	#We can merge with OUT at most 1 time (2 times if we flip)
-		[canMerge,a_ID,b_ID,A,B] = self.canMergeOUT(ID)
-		while not ([canMerge,a_ID,b_ID,A,B]==[False,None,None,None,None]):
-			count += 1
-			if self.printStatus:
-				print "About to merge with OUT for the "+str(count)+" time"
-			ID, flipped = self.merge(a_ID,b_ID,A,B)
-			if self.printStatus:
-				self.printContigs("After merging with OUT")
-			if (count==1) and flipped:
-				maxCount = 2
-			[canMerge,a_ID,b_ID,A,B] = self.canMergeOUT(ID)
-
-		if count>maxCount:
-			#self.printContigs()
-			print ID, self.contigs[ID]
-			raise Exception("We can only merge OUT once if we dont flip and twice if we flip")
+		CMO = self.canMergeOUT(c_ID)
+		CMI = self.canMergeIN(c_ID)
+		next_merge_with_OUT = True	#True if we're merging next with an outgoing connection. False if we're merging next with an incoming connection
+		if CMO:
+			if CMI:
+				numMerges=2
+				if (CMI[1]==True) and (CMO[1]==False):
+					next_merge_with_OUT = False
+			else:
+				numMerges=1
+		elif CMI:
+			numMerges=1
+			next_merge_with_OUT = False
+		else:
+			return	#numMerges=0
 
 		count = 0
-		maxCount = 1	#We can merge with IN at most 1 time
-		[canMerge,a_ID,b_ID,A,B] = self.canMergeIN(ID)
-		while not ([canMerge,a_ID,b_ID,A,B]==[False,None,None,None,None]):
+		while count<numMerges:
+			CMO = self.canMergeOUT(c_ID)
+			CMI = self.canMergeIN(c_ID)
 			count += 1
-			if self.printStatus:
-				print "About to merge with IN for the "+str(count)+" time"
-			ID, flipped = self.merge(a_ID,b_ID,A,B)
-			if self.printStatus:
-				self.printContigs("After merging with IN")
-			[canMerge,a_ID,b_ID,A,B] = self.canMergeIN(ID)
-
-		if count>maxCount:
-			self.printContigs()
-			print ID
-			raise Exception("We can only merge IN once if we dont flip and twice if we flip. count="+str(count))
+			if next_merge_with_OUT:
+				#Merge-um við OUT tengingu
+				[n_ID,n_B] = CMO
+				if n_B:	#C->N og ekkert flip
+					c_ID = self.merge(c_ID,n_ID,True,True,"")
+					if count<numMerges:
+						next_merge_with_OUT = False
+						CMI = self.canMergeIN(c_ID)
+						#assert(CMI)
+					continue
+				else:	#C->twin(N) og flippum
+					c_ID = self.merge(c_ID,n_ID,True,False,"A")
+					if count<numMerges:
+						next_merge_with_OUT = True
+						CMO = self.canMergeOUT(c_ID)
+						#assert(CMO)
+					continue
+			else:
+				#Merge-um við IN tengingu
+				[n_ID,n_B] = CMI
+				if n_B:	#N->C og ekkert flip
+					c_ID = self.merge(n_ID,c_ID,True,True,"")
+					if count<numMerges:
+						next_merge_with_OUT = True
+						CMO = self.canMergeOUT(c_ID)
+						#assert(CMO)
+					continue
+				else:	#twin(N)->C og flippum
+					c_ID = self.merge(n_ID,c_ID,False,True,"B")
+					if count<numMerges:
+						next_merge_with_OUT = False
+						CMI = self.canMergeIN(c_ID)
+						#assert(CMI)
+					continue
+		CMO = self.canMergeOUT(c_ID)
+		CMI = self.canMergeIN(c_ID)
+		#assert(not CMO), "count="+str(count)+". CMO="+str(CMO)+". numMerges="+str(numMerges)
+		#assert(not CMI), "count="+str(count)+". CMI="+str(CMI)+". numMerges="+str(numMerges)
 
 		if self.assertLegal:
 			if not self.isLegalDBG():
 				self.printContigs("Not a legal DBG")
-				print "The ID of the contig failing to merge:",ID
+				print "The ID of the contig failing to merge:",c_ID
 				raise Exception("The graph is supposed to be a legal DBG")
 
-	def canMergeOUT(self,ID):
-		assert ID in self.contigs, "ID must be the ID of a contig in the graph"
-		if self.printFunctionNames:
-			pass
-			#print "canMergeOUT(ID="+str(ID)+")"
-		if self.printStatus:
-			pass
-			#self.printContigs("inside canMergeOUT")
-			#self.printKmers("Kmers")
+	#nýbúinn að einfalda
+	def canMergeOUT(self,c_ID):
+		assert c_ID in self.contigs, "ID must be the ID of a contig in the graph"
+		c_OUT = self.contigs[c_ID][2]
+		if len(c_OUT)==1:
+			#C has exactly one OUT: N. Find all the info we have about N:
+			[n_ID,n_B] = c_OUT[0]
+			[n, n_IN, n_OUT, n_COV] = self.contigs[n_ID]
+			if c_ID==n_ID:
+				return []
 
-		#Get the info about segment:
-		[segment, IN, OUT, COV] = self.contigs[ID]
-		L = len(segment)
-		#print ID, segment, IN, OUT, COV
-
-		#Try to merge segment with its OUT:
-		if len(OUT)==1:
-			if self.printStatus:
-				print "segment has exactly one OUT"
-			#segment has exactly one OUT: N. Find all the info we have about N:
-			[N_ID,N_B] = OUT[0]
-			[N, N_IN, N_OUT, N_COV] = self.contigs[N_ID]
-
-			#check whether we can merge segment and N into 1 contig
-			if N_B and len(N_IN)==1:
+			#Check whether we can merge C->N:
+			if n_B and len(n_IN)==1:
 				if self.printStatus:
-					print "We can merge segment with it's one OUT"
-				if ID==N_ID:
-					if self.printStatus:
-						print "Nema nei! Segment er að tengjast í sjálfan sig svo við viljum ekki merge-a"
-				else:
-					#segment->N
-					#N has exactly one IN: segment
-					#Now we can merge segment and N into 1 contig new_c
-					return [True,ID,N_ID,True,True]
+					print "C->N. C has exactly one OUT and N has exactly one IN. Can merge"
+				return [n_ID,True]
 
-			#check whether we can merge segment and twin(N) into 1 contig
-			elif not N_B and len(N_OUT)==1:
+			#Check whether we can merge C->twin(N):
+			elif not n_B and len(n_OUT)==1:
 				if self.printStatus:
-					print "We can merge segment with the twin of it's one OUT"
-				if ID==N_ID:
-					if self.printStatus:
-						print "Nema nei! Segment er að tengjast í sjálfan sig svo við viljum ekki merge-a"
-				else:
-					#segment->twin(N)    or N->twin(segment)
-					#N has exactly one OUT: twin(segment)
-					#Now we can merge segment and twin(N) into 1 contig new_c. Better: merge N and twin(segment)
-					return [True,ID,N_ID,True,False]
+					print "C->twin(N) and N->twin(C). both have exactly one OUT. Can merge"
+				return [n_ID,False]
+		return []
 
-		return [False,None,None,None,None]
+	def canMergeIN(self,c_ID):
+		assert c_ID in self.contigs, "ID must be the ID of a contig in the graph"
+		c_IN = self.contigs[c_ID][1]
+		if len(c_IN)==1:
+			#C has exactly one IN: N. Find all the info we have about N:
+			[n_ID,n_B] = c_IN[0]
+			[n, n_IN, n_OUT, n_COV] = self.contigs[n_ID]
+			if c_ID==n_ID:
+				return []
 
-	def canMergeIN(self, ID):
-		assert ID in self.contigs, "ID must be the ID of a contig in the graph"
-		if self.printFunctionNames:
-			pass
-			#print "canMergeIN(ID="+str(ID)+")"
-		if self.printStatus:
-			pass
-			#self.printContigs("inside canMergeIN")
-			#self.printKmers("Kmers")
-
-		#Get the info about segment (might have changed if we merged with some OUT):
-		[segment, IN, OUT, COV] = self.contigs[ID]
-		L = len(segment)
-
-		#Try to merge segment with its IN:
-		if len(IN)==1:
-			if self.printStatus:
-				print "segment has exactly one IN"
-			#segment has exactly one IN: N. Find all the info we have about N:
-			[N_ID,N_B] = IN[0]
-			[N, N_IN, N_OUT, N_COV] = self.contigs[N_ID]
-
-			#check whether we can merge N and segment into 1 contig
-			if N_B and len(N_OUT)==1:
+			#Check whether we can merge N->C:
+			if n_B and len(n_OUT)==1:
 				if self.printStatus:
-					print "We can merge segment with it's one IN"
-				if ID==N_ID:
-					if self.printStatus:
-						print "Nema nei! Segment er að tengjast í sjálfan sig svo við viljum ekki merge-a"
-				else:
-					#N->segment
-					#N has exactly one OUT: segment
-					#Now we can merge N and segment into 1 contig new_c
-					return [True,N_ID,ID,True,True]
+					print "N->C. C has exactly one IN and N has exactly one OUT. Can merge"
+				return [n_ID,True]
 
-			elif not N_B and len(N_IN)==1:
+			#Check whether we can merge twin(N)->C:
+			elif not n_B and len(n_IN)==1:
 				if self.printStatus:
-					print "We can merge segment with the twin of it's one IN"
-				if ID==N_ID:
-					if self.printStatus:
-						print "Nema nei! Segment er að tengjast í sjálfan sig svo við viljum ekki merge-a"
-				else:
-					#twin(N)->segment or twin(segment)->N
-					#N has exactly one IN: segment
-					#now we can merge twin(segment) and N into 1 contig new_c
-					#new_ID = self.getID()
-					return [True,N_ID,ID,False,True]
+					print "twin(N)->C and twin(C)->N. both have exactly one IN. Can merge"
+				return [n_ID,False]
+		return []
 
-		return [False,None,None,None,None]
-
-	def merge(self,a_ID,b_ID,A,B,flipped=False):
+	#flipSelect:
+	#	"" flip either one
+	#	"A" flip A
+	#	"B" flip B
+	def merge(self,a_ID,b_ID,A,B,flipSelect=""):
 		#Helper function for mergeSegment
 		#A=True, B=True:   a->b
 		#A=True, B=False:  a->twin(b)
@@ -1531,6 +1505,7 @@ class Graph:
 		assert isinstance(A,bool)
 		assert isinstance(B,bool)
 		if A and B:
+			assert(flipSelect=="")
 			#merging a->b into new_c (by deleting b, adding it to a and updating a and it's connections)
 			#self.changeID_OUTs(b_ID,a_ID,conns)		#make the OUTs of b instead connect to a
 			self.changeID_ofConnections(b_ID,a_ID)
@@ -1541,17 +1516,25 @@ class Graph:
 			del self.contigs[b_ID]
 			#add kmers from new_c to kmerDict
 			self.addKmersFromContig(a_ID, new_c)
-			return a_ID, flipped
+			return a_ID
 		elif A and (not B):
 			#merging a->twin(b) into new_c
-			self.flipContig(a_ID)
-			return self.merge(b_ID,a_ID,True,True,True)
+			if flipSelect in ["","A"]:
+				self.flipContig(a_ID)
+				return self.merge(b_ID,a_ID,True,True,"")
+			elif flipSelect=="B":
+				self.flipContig(b_ID)
+				return self.merge(a_ID,b_ID,True,True,"")
 		elif (not A) and B:
 			#merging twin(a)->b into new_c (by deleting a)
-			self.flipContig(a_ID)
-			return self.merge(a_ID,b_ID,True,True,True)
+			if flipSelect in ["","A"]:
+				self.flipContig(a_ID)
+				return self.merge(a_ID,b_ID,True,True,"")
+			elif flipSelect=="B":
+				self.flipContig(b_ID)	#twin(a)->twin(b)==b->a
+				return self.merge(b_ID,a_ID,True,True,"")
 		elif (not A) and (not B):
-			return self.merge(b_ID,a_ID,True,True)
+			return self.merge(b_ID,a_ID,True,True,"")
 
 	
 	#--------------------------------------------------------------------------
@@ -2023,10 +2006,10 @@ class Graph:
 
 		#Set the maximum length for a path to be part of an isolated collection
 		#or a tip. This is also the maximum length through a bubble
-		MPL = 2*self.k
+		MPL = self.k+1
 
 		#Find and mark all isolated contigs in the graph:
-		isoMPL = MPL#5
+		isoMPL = MPL
 		#print "We're using MPL="+str(isoMPL)+" for markAllIsolated instead of MPL="+str(MPL)
 		self.markAllIsolated(MPL=isoMPL)
 
@@ -2048,7 +2031,7 @@ class Graph:
 			assert(R in [-1,1,2]), "All contigs should either be marked as isolated, tips or with a -1"
 
 		#Find and mark all bubbles:
-		bubMPL = 2*self.k
+		bubMPL = MPL
 		#print "We're using MPL="+str(bubMPL)+" for markAllBubbles instead of MPL="+str(MPL)
 		self.markAllBubbles(MPL=bubMPL)
 		

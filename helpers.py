@@ -281,39 +281,36 @@ def file_len(fname):
             pass
     return i + 1
 
-def createGraphName(maxAddCov,maxSplitCov,withSpaces=False,latexFormat=False):
-    latex_inf = "$\\infty$"
-    if latexFormat:
-        s = "G"
+def createGraphName_tex(MAC,MSC,inTable=False):
+    if inTable:
+        latex_inf = "\\infty"
     else:
-        s = "G_"
-    if withSpaces:
-        s+=" "
-    if maxAddCov == float('inf'):
-        if latexFormat:
-            s += latex_inf
-        else:
-            s += 'inf'
+        latex_inf = "\infty"
+    s = "$G_{"
+    if MAC == float('inf'):
+        s += latex_inf
     else:
-        s += str(maxAddCov)
-    if latexFormat:
-        pass
+        s += str(MAC)
+    s += ","
+    if MSC==float('inf'):
+        s += latex_inf
     else:
-        s += "_"
-    if maxSplitCov==float('inf'):
-        if latexFormat:
-            s += latex_inf
-        else:
-            s += 'inf'
+        s += str(MSC)
+    s += "}$"
+    return s    #$G_{20,30}$
+
+def createGraphName(MAC,MSC):
+    s = "G_"
+    if MAC == float('inf'):
+        s += 'inf'
     else:
-        if withSpaces:
-            s += str(maxSplitCov)
-        else:
-            s += str(maxSplitCov)
-    #s = G10s15
-    return s
-    #G_10_15
-    #G_inf_inf
+        s += str(MAC)
+    s += "_"
+    if MSC==float('inf'):
+        s += 'inf'
+    else:
+        s += str(MSC)
+    return s    #G_10_15 or G_inf_inf
 
 #---------------------------------------------------------------------------
 #------------------------Functions to work with time------------------------
@@ -351,68 +348,60 @@ def printRuntimesToFile(genomeName, filters, runTimes):
                 runTimeStrings[i] = str(val[0]) + " min, " + str(val[1]) + " sec"
         return runTimeStrings
     
-    #maxAddCovs = [5, 10, 15, 20, 30,float('inf')]
     runTimes = modRunTimes(runTimes)
     timeFile = "Output/runTimes_t.txt"
-    latex_inf = "$\\\\infty$"
     latex_newline = "\\\\\n"
+    Ginf_key_t = "$G_{\\\\infty,\\\\infty}$"
+    Ginf_key_sa = "$G_{\\infty,\\infty}$"
     if genomeName=="t":
         tf = open(timeFile, 'w')
         for i,(MAC,MSC) in enumerate(filters):
-            #for maxSplitCov in maxSplitCovs[i]:
-            s = createGraphName(MAC,MSC)
-            s += " & "+runTimes[i]+" & "+latex_newline
-            #s = G10s15 & 59 sec & newline
+            s = createGraphName_tex(MAC,MSC,inTable=True)
+            s += " & "+runTimes[i]+" & "+latex_newline  #s = G_{10,15} & 59 sec & \n
             tf.write(s)
         tf.close()
     elif genomeName=="sa":
-        #raise Exception("printRunTimesToFile er ekki tilbúið fyrir sa")
         tf_old = open(timeFile, 'r')
         tf = open("Output/runTimes_tAndSA.txt", 'w')
-        #graphNames = []
-        #rest = []
         nameDict = collections.defaultdict(tuple)
         #G20->[t_time, sa_time]
         for i, line in enumerate(tf_old):
             line=line[0:-3]
-            #print line
             temp = line.strip().split(" & ")
             temp[1] = temp[1][0:-2]
-            #print temp
-            if temp[0]=="G$\\infty$":
-                nameDict["G"+latex_inf] = [temp[1],-1]
+            if temp[0]==Ginf_key_sa:
+                nameDict[Ginf_key_sa] = [temp[1],""]    #hér kemur dularfulli mínus ásinn
             else:
-                nameDict[temp[0]] = [temp[1],-1]
+                nameDict[temp[0]] = [temp[1],""]
         runTimeCounter = -1
         for i,(MAC,MSC) in enumerate(filters):
-            #for maxSplitCov in maxSplitCovs[i]:
             runTimeCounter += 1
-            gn = createGraphName(MAC,MSC)
-            if gn in nameDict:
-                nameDict[gn][1] = runTimes[runTimeCounter]
+            gn_tex = createGraphName_tex(MAC,MSC,inTable=True)
+            if gn_tex in nameDict:
+                nameDict[gn_tex][1] = runTimes[runTimeCounter]
             else:
-                nameDict[gn] = ["",runTimes[runTimeCounter]]
-                #tf.write(gn+" & "+rest[j]+" "+runTimes[index]+latex_newline)
+                nameDict[gn_tex] = ["",runTimes[runTimeCounter]]
         
         for key,value in nameDict.iteritems():
             print key,value
-        Ginf_key = "G_inf_inf"
-        temp = nameDict[Ginf_key]
-        Ginf_val = "G$\\\\infty$ & "+temp[0]+" & "+temp[1]+latex_newline
-        del nameDict[Ginf_key]
+        temp = nameDict[Ginf_key_sa]
+        del nameDict[Ginf_key_sa]
         nameList = [k+" & "+v[0]+" & "+str(v[1])+latex_newline for k,v in nameDict.iteritems()]
+        print "---------------------------------------------"
         print nameList
-        print nameList[0].split("_")
+        print "---------------------------------------------"
+        print nameList[0].split("_")[1][1:].split("}")[0].split(",")[0]
 
-        nameList.sort(key=lambda x: (int(x.split("_")[1]), float(x.split("_")[2][0:3])))
+        nameList.sort( key=lambda x: (x.split("_")[1][1:].split("}")[0].split(",")[0] , x.split("_")[1][1:].split("}")[0].split(",")[1]) )
         for i, v in enumerate(nameList):
             nameList[i] = nameList[i][0]+nameList[i][2:]
-            if "s " in nameList[i]:
-                index = nameList[i].find("s ")
-                nameList[i] = nameList[i][0:index-1]+nameList[i][index]+nameList[i][index+2:]
+            #if "s " in nameList[i]:
+            #    index = nameList[i].find("s ")
+            #    nameList[i] = nameList[i][0:index-1]+nameList[i][index]+nameList[i][index+2:]
+        Ginf_val = Ginf_key_sa+" & "+temp[0]+" & "+temp[1]+" "+latex_newline
         nameList.append(Ginf_val)
         for v in nameList:
-            #print v
+            print v
             tf.write(v)
     else:
         raise Exception("Illegal value for genomeName="+str(genomeName)+". It must be either t or sa")
@@ -459,7 +448,7 @@ def createKmerDictFromGenomeFile(k,genomeFile):
 def createKmerDictFromReadFiles(k,readFiles):
     #Creates a k-merdict from two .fastq files
     kmersInReads = collections.defaultdict(int)
-    for s in segments(readFiles,k):
+    for s,counter in segments(readFiles,k):
         for km in dbg.kmers(s,k):
             rep_km = min(km,dbg.twin(km))
             kmersInReads[rep_km] += 1
@@ -613,9 +602,9 @@ def fractionFromGenomeInObject(kmersInGenome,numKmersInGenome,Object,isGraph=1):
     assert (fraction>=0) and (fraction<=1), "A fraction must be between 0 and 1"
     return fraction
 
+"""
 def printCovDictToFile(covDict,fileName):
     f = open(fileName, 'w')
-    #for maxAddCov, values in covDict.iteritems():   #<---virkar ekki því covDict.keys() er núna (maxAddCov,maxSplitCov)
     for key, values in covDict.iteritems():
         maxAddCov = key[0]
         maxSplitCov = key[1]
@@ -623,12 +612,12 @@ def printCovDictToFile(covDict,fileName):
         #values = [COV, G_len,G_frac] fyrir sérhvert Gx
         if maxAddCov == float('inf'):
             assert(len(values)==5)
-            #[COV, G_len, G_frac, BF_len, BF_frac] = values
             f.write(str(key)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+";"+str(values[3])+";"+str(values[4])+"\n")
         else:
             assert(len(values)==3)
             f.write(str(key)+";"+str(values[0])+";"+str(values[1])+";"+str(values[2])+"\n")
     f.close()
+"""
 
 def readCovDictFromFile(fileName):
     f = open(fileName, 'rU')

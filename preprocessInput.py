@@ -9,7 +9,7 @@ import sys
 #Helper function 1. Creates a dict for all the k-mers in the genome and saves them to a file
     #                   Returns the number of k-mers in the genome
 def doGenomeStuff(genomeName,k,genomeFile):
-    kmersInGenome = helpers.createKmerDictFromGenomeFile(k,genomeFile)
+    kmersInGenome = helpers.createKmerDictFromGenomeFile(k,genomeFile,genomeName)
     genomeFile = "Output/"+str(genomeName)+"/kmers_genome.txt"
     #print "Printing to", genomeFile
     kmer_file = genomeFile

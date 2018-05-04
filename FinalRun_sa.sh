@@ -11,8 +11,8 @@ printf "\nN50:\n"
 python N50.py sa 31
 printf "\npercTable:\n"
 python percTable.py sa
-printf "\n---exploreWithBandage:---\n"
-python exploreWithBandage.py sa 31             #<---naive sprengir minnid
+#printf "\n---exploreWithBandage:---\n"
+#python exploreWithBandage.py sa 31             #<---naive sprengir minnid
 #---exploreWithBandage:---
 #Starting on G
 #contigsInG: 817316

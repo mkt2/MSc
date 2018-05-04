@@ -191,9 +191,13 @@ def BFAdder(fn,k,BF,G,maxAddCov,maxSplitCov,read_len,genome_len,sampleAtReadsNum
     yield COV, values
 
 def selectGenome(genomeName):
+    I = float('inf')
     if genomeName=="t":
+        #Gömul gildi:
+        '''
         filters = [ \
-        (float('inf'),5),(float('inf'),10),(float('inf'),20), #(float('inf'),2)\ 
+        (float('inf'),2),(10,11),(20,10), \
+        (30,10),(float('inf'),5),(float('inf'),10),(float('inf'),20), #(float('inf'),2)\ 
         (5,float('inf')), \
         (10,12),(10,15),(10,float('inf')), #fæ error í merge fyrir (10,11)\
 		(15,16),(15,20),(15,float('inf')), \
@@ -201,9 +205,20 @@ def selectGenome(genomeName):
 		(30,float('inf')), \
         (15,10),(20,15),(30,20), \
 		(float('inf'),float('inf'))]
+        '''
+        #Ný gildi:
+        filters = [ \
+        (I,2),(I,3), \
+        (10,2),(10,5),(10,11),(10,I), \
+        (15,2),(15,5),(15,10),(15,I), \
+        (20,5),(20,I), \
+        (I,I), \
+        ]
         fn = ["Input/t/r1.fastq", "Input/t/r2.fastq"]
         numberOfKmers = 8000000
     elif genomeName=="sa":
+        #Gömul gildi:
+        '''
         filters = [ \
         (15,16),(15,20),(15,float('inf')), \
 		(20,21),(20,25),(20,float('inf')), \
@@ -211,11 +226,24 @@ def selectGenome(genomeName):
         (float('inf'),float('inf')), \
         (15,10),(20,15),(30,20), \
 		]
+        '''
+        #Ný gildi:
+        filters = [ \
+        (5,2),(5,5),(5,10),(5,I), \
+        (I,5), \
+        (10,5),(10,11),(10,I), \
+        (15,5),(15,I), \
+        (I,I) \
+        ]
+        #vil eiga en þarf ekki að keyra aftur svo lengi sem ég hendi ekki skránum
+        #(15,10), (15,I)
+        #(I,I)
+        #Pæling að bæta við:
+        #(20,5)
         fn = ["Input/Staphylococcus_aureus/frag_1.fastq", "Input/Staphylococcus_aureus/frag_2.fastq"]
         numberOfKmers = 100000000
     else:
         raise Exception("The genomeName must be either 't' or 'sa'!")
-    #return maxAddCovs, maxSplitCovs, fn, numberOfKmers
     return filters, fn, numberOfKmers
 
 #Need to run preprocessInput.py before running this file

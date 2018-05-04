@@ -2389,7 +2389,8 @@ class Test_mergeSegment(unittest.TestCase):
         G.contigs[G.getID()] = ["CCT",[(0,True)],[(2,True)],0]
         G.contigs[G.getID()] = ["CTT",[(1,True)],[],0]
         G.addKmersFromAllContigs()
-        G.mergeSegment(1)
+        ID = G.mergeSegment(1)
+        G.mergeSegment(ID)
         G_correct.contigs[G_correct.getID()] = ["ACCTT",[],[],0]
         G_correct.addKmersFromAllContigs()
         self.assertTrue(isSameGraph(G,G_correct))
@@ -2410,7 +2411,8 @@ class Test_mergeSegment(unittest.TestCase):
         G.addKmersFromAllContigs()
 
 
-        G.mergeSegment(1)
+        ID = G.mergeSegment(1)
+        G.mergeSegment(ID)
         G_correct.contigs[G_correct.getID()] = ["ACCTT",[(1,True),(2,False)],[],0]
         G_correct.contigs[G_correct.getID()] = ["CAC",[],[(0,True)],0]
         G_correct.contigs[G_correct.getID()] = ["GTC",[(0,False)],[],0]
@@ -2432,7 +2434,8 @@ class Test_mergeSegment(unittest.TestCase):
         G.contigs[G.getID()] = ["CAA",[],[(2,False)],0]                     #6
         G.addKmersFromAllContigs()
 
-        G.mergeSegment(1)
+        ID = G.mergeSegment(1)
+        G.mergeSegment(ID)
         G_correct.contigs[G_correct.getID()] = ["ACCTT",[(1,True),(2,False)],[(3,True),(4,False)],0]
         G_correct.contigs[G_correct.getID()] = ["CAC",[],[(0,True)],0]
         G_correct.contigs[G_correct.getID()] = ["GTC",[(0,False)],[],0]

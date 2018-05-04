@@ -17,55 +17,61 @@ def getTotals(G,k,theContigs=-1):
 		theContigs = G.contigs.keys()
 	tot_iso = 0
 	tot_tip = 0
-	tot_bub3 = 0
+	#tot_bub3 = 0
 	tot_bub4 = 0
-	tot_non = 0
+	#tot_non = 0
+	tot_genomic = 0
+	tot_complex = 0
 	for c_ID in theContigs:
 		[c,c_IN,c_OUT,c_COV] = G.contigs[c_ID]
 		R = G.degrees[c_ID][2]
 		if R==0:
-			tot_non += helpers.cLen(c,k)
+			tot_complex += helpers.cLen(c,k)
 		elif R==1:
 			tot_iso += helpers.cLen(c,k)
 		elif R==2:
 			tot_tip += helpers.cLen(c,k)
 		elif R==3:
-			tot_bub3 += helpers.cLen(c,k)
+			raise Exception('R cant be 3')
+			#tot_bub3 += helpers.cLen(c,k)
 		elif R==4:
 			tot_bub4 += helpers.cLen(c,k)
+		elif R==5:
+			tot_genomic += helpers.cLen(c,k)
 		else:
 			raise Exception("Illegal value for R")
-	return [tot_iso,tot_tip,tot_bub3,tot_bub4,tot_non]
-
-"""
-def selectGenome(genomeName):
-	if genomeName=="t":
-		#filters = [(5,float('inf')),(float('inf'),float('inf'))]
-		filters = [ \
-        (5,float('inf')), \
-        (10,12),(10,15),(10,float('inf')), #fæ error í merge fyrir (10,11)\
-		(15,16),(15,20),(15,float('inf')), \
-		(20,float('inf')), \
-		(30,float('inf')), \
-        (15,10),(20,15),(30,20), \
-		(float('inf'),float('inf'))]
-	elif genomeName=="sa":
-		filters = [ \
-        (15,16),(15,20),(15,float('inf')), \
-		(20,21),(20,25),(20,float('inf')), \
-		(30,float('inf')), \
-        (15,10),(20,15),(30,20), \
-		(float('inf'),float('inf'))]
-	else:
-		raise Exception("The genomeName must be either 't' or 'sa'!")
-	return filters
-"""
+	#return [tot_iso,tot_tip,tot_bub3,tot_bub4,tot_non]
+	return [tot_iso,tot_tip,tot_bub4,tot_genomic,tot_complex]
 
 def totalToPerc(Graph,totals,numKmers=-1):
 	if numKmers==-1:
 		return [x/float(Graph.numKmerPairs()) for x in totals]
 	else:
 		return [x/float(numKmers) for x in totals]
+
+def createNewTable(outDir,total_G,total_Gxy,MAC,MSC):
+	gn_tex = helpers.createGraphName_tex(MAC,MSC,inTable=True)
+	tex_newLine = " \\\\\n"
+	
+	[tot_iso,tot_tip,tot_bub4,tot_genomic,tot_complex] = total_G
+	trash_G = tot_iso+tot_tip+tot_bub4
+	genomic_G = tot_genomic
+	complex_G = tot_complex
+
+	[tot_iso,tot_tip,tot_bub4,tot_genomic,tot_complex] = total_Gxy
+	trash_Gxy = tot_iso+tot_tip+tot_bub4
+	genomic_Gxy = tot_genomic
+	complex_Gxy = tot_complex
+	
+	outFile = outDir+"/newTable_"+str(MAC)+"_"+str(MSC)+".txt"
+	f = open(outFile, 'w')
+	f.write(" & $G$ & "+str(gn_tex)+tex_newLine)
+	f.write("\\hline\n")
+	f.write("Genomic & "+str(genomic_G)+" & "+str(genomic_Gxy)+tex_newLine)
+	f.write("Trash & "+str(trash_G)+" & "+str(trash_Gxy)+tex_newLine)
+	f.write("Complex & "+str(complex_G)+" & "+str(complex_Gxy)+tex_newLine)
+	f.close()
+
 
 if __name__ == "__main__":
 	genomeName = sys.argv[1]
@@ -76,6 +82,7 @@ if __name__ == "__main__":
 	covDict = helpers.readCovDictFromFile(fileName=outDir+"/covDict.txt")
 	filters = covDict.keys()
 	filters.sort(key=lambda tup: (tup[0],tup[1]), reverse=False)
+	kmersInGenome = helpers.readKmersFromFileToSet(kmerFile=outDir+'/kmers_genome.txt')
 
 	if not skipPrint:
 		print "Running whatIsMissing.py for genome="+str(genomeName)+":"
@@ -87,7 +94,7 @@ if __name__ == "__main__":
 
 	if not skipPrint:
 		print "Analyzing the contigs in G:"
-	G.analyzeAllContigsInCollection()
+	G.analyzeAllContigsInCollection(kmersInGenome)
 	totals_G = getTotals(G,k,-1)
 	#perc_G = [x/float(G.numKmerPairs()) for x in totals_G]
 	perc_G = totalToPerc(G,totals_G)
@@ -135,7 +142,7 @@ if __name__ == "__main__":
 		assert(len(I_kmerPairs)*2==len(I_kmers)), "I_kmerPairs has exactly half as many values as I_kmers"
 
 		#Now we'll give iso, tip, bub ratings to every contig in Gx
-		Gx.analyzeAllContigsInCollection()
+		Gx.analyzeAllContigsInCollection(kmersInGenome)
 		if not skipPrint:
 			print "D) Done assigning a rating to every contig in Gx"
 		
@@ -156,8 +163,8 @@ if __name__ == "__main__":
 		if not skipPrint:
 			print "E) Done printing the results from analyzeAllContigsInCollection to a file"
 		leBarChart.createBarChart(outDir,genomeName,MAC,MSC)
+		createNewTable(outDir,totals_G,totals_Gx,MAC,MSC)
 		if not skipPrint:
 			print "F Done creating the bar Chart"
 	if not skipPrint:	
 		print "Finished running whatIsMissing.py for genome="+genomeName
-

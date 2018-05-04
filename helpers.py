@@ -381,25 +381,29 @@ def printRuntimesToFile(genomeName, filters, runTimes):
                 nameDict[gn_tex][1] = runTimes[runTimeCounter]
             else:
                 nameDict[gn_tex] = ["",runTimes[runTimeCounter]]
-        
+        print "\nprinting the name dict:"
         for key,value in nameDict.iteritems():
             print key,value
         temp = nameDict[Ginf_key_sa]
         del nameDict[Ginf_key_sa]
         nameList = [k+" & "+v[0]+" & "+str(v[1])+latex_newline for k,v in nameDict.iteritems()]
-        print "---------------------------------------------"
+        print "\n---------------------------------------------"
+        print "printing nameList:"
         print nameList
         print "---------------------------------------------"
         print nameList[0].split("_")[1][1:].split("}")[0].split(",")[0]
+        print "---------------------------------------------"
 
         nameList.sort( key=lambda x: (x.split("_")[1][1:].split("}")[0].split(",")[0] , x.split("_")[1][1:].split("}")[0].split(",")[1]) )
-        for i, v in enumerate(nameList):
-            nameList[i] = nameList[i][0]+nameList[i][2:]
+        #for i, v in enumerate(nameList):
+        #    nameList[i] = nameList[i][0]+nameList[i][2:]
             #if "s " in nameList[i]:
             #    index = nameList[i].find("s ")
             #    nameList[i] = nameList[i][0:index-1]+nameList[i][index]+nameList[i][index+2:]
         Ginf_val = Ginf_key_sa+" & "+temp[0]+" & "+temp[1]+" "+latex_newline
         nameList.append(Ginf_val)
+        print "\n---------------------------------------------"
+        print "printing nameList again:"
         for v in nameList:
             print v
             tf.write(v)
@@ -423,7 +427,8 @@ def segments(fn,k):
                 for s in segments:
                     yield s, segmentCount
 
-def createKmerDictFromGenomeFile(k,genomeFile):
+"""
+def createKmerDictFromGenomeFile_afrit(k,genomeFile):
     #Creates a k-merdict from a .fa or .fasta file
     kmersInGenome = collections.defaultdict(int)
     h = open(genomeFile, "rU")
@@ -443,6 +448,54 @@ def createKmerDictFromGenomeFile(k,genomeFile):
             for km in dbg.kmers(line,k):
                 rep_km = min(km,dbg.twin(km))
                 kmersInGenome[rep_km] += 1
+    return kmersInGenome
+"""
+
+def createKmerDictFromGenomeFile(k,genomeFile,genomeName):
+    def cleanLine(line):
+        line = line.strip()
+        line = line if all([c in alphabet for c in line]) else ""
+        return line
+
+    def addAllKmersFromSequence(seq):
+        for km in dbg.kmers(seq,k):
+            rep_km = min(km,dbg.twin(km))
+            kmersInGenome[rep_km] += 1
+
+    #Creates a k-merdict from a .fa or .fasta file
+    kmersInGenome = collections.defaultdict(int)
+    h = open(genomeFile, "rU")
+    #genomeFileExtension = os.path.splitext(genomeFile)[1]
+    if genomeName=="t":
+        #genome-ið er allt í einni línu svo ekkert vesen
+        genome = h.readline()
+        genome = h.readline().rstrip('\n')
+        h.close()
+        for km in dbg.kmers(genome,k):
+            rep_km = min(km,dbg.twin(km))
+            kmersInGenome[rep_km] += 1
+    elif genomeName=="sa":
+        line1 = h.readline()
+        line1 = h.readline()
+        line1 = cleanLine(line1)
+        addAllKmersFromSequence(line1)
+        #print "line1:", line1
+        lineCount = 2
+        for line2 in h:
+            lineCount+=1
+            #print "line2:", line2
+            if line2[0]==">":
+                return kmersInGenome
+            line2 = cleanLine(line2)
+            if line2=="":
+                continue
+            #assert(len(line2)==70), "line2:"+str(line2)+". length="+str(len(line2))+". lineCount="+str(lineCount)
+            temp = line1[-30:]
+            assert(len(temp)==30), str(temp)+", "+str(line1)
+            sequence = line1[-30:]+line2
+            #assert(len(sequence)==100)
+            addAllKmersFromSequence(sequence)
+            line1 = line2
     return kmersInGenome
 
 def createKmerDictFromReadFiles(k,readFiles):
@@ -558,7 +611,8 @@ def readKmersFromFileToGraph(kmerFile,G):
     f.close()
 
 def writeTotalsAndPercToFile(fileName,totals,percs):
-	#totals = [tot_iso,tot_tip,tot_bub3,tot_bub4,tot_non]
+	#totals = [tot_iso,tot_tip,tot_bub3,tot_bub4,tot_non]           urelt
+    #totals = [tot_iso,tot_tip,tot_bub4,tot_genomic,tot_complex]
 	f = open(fileName, 'w')
 	assert(len(totals)==len(percs))
 	for i in xrange(len(totals)):
@@ -668,6 +722,15 @@ def readKmersFromFileToDict(kmerFile):
         kmerDict[km] = 1
     f.close()
     return kmerDict
+
+def readKmersFromFileToSet(kmerFile):
+    kmerSet = set()
+    f = open(kmerFile, 'rU')
+    for km in f:
+        km = km.rstrip('\n')
+        kmerSet.add(km)
+    f.close()
+    return kmerSet
 
 def createNaiveFromReads(fn,k,GraphObject):
     d = dbg.build(fn,k,1)

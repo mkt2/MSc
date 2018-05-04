@@ -591,13 +591,15 @@ class Graph:
 			return True
 
 	def isLegal_IN_and_OUT(self):
-		#assert(False), "We should never call this"
 		#if self.printIsLegal:
 		#	print "isLegal_IN_and_OUT()"
 		#make sure connections go both ways:
 		for c_ID in self.contigs:
 			[c,c_IN,c_OUT,c_COV] = self.contigs[c_ID]
-			#print "c_ID:",c_ID
+			#Make sure both c_IN and c_OUT have max 4 connectioins
+			assert(len(c_IN)<=4)
+			assert(len(c_OUT)<=4)
+
 			#IN:
 			for (x_ID,x_B) in c_IN:
 				legal = False
@@ -1035,7 +1037,8 @@ class Graph:
 					self.contigs[s3_ID] = [s3,[],[],helpers.cLen(s3,self.k)*2]
 					self.addKmersFromContig(s3_ID,s3)
 					self.connectSegment(s3_ID,s3)
-					self.mergeSegment(s3_ID)
+					s3_ID = self.mergeSegment(s3_ID)				#kalla tvisvar á merge því við getum lent í að þurfa tvö merge þegar bætum við nýrri nóðu í grafið
+					s3_ID = self.mergeSegment(s3_ID)
 					if self.assertLegal:
 						assert self.isLegalDBG()
 
@@ -1376,64 +1379,21 @@ class Graph:
 			assert self.isLegalGraph()
 
 		CMO = self.canMergeOUT(c_ID)
-		CMI = self.canMergeIN(c_ID)
-		next_merge_with_OUT = True	#True if we're merging next with an outgoing connection. False if we're merging next with an incoming connection
 		if CMO:
-			if CMI:
-				numMerges=2
-				if (CMI[1]==True) and (CMO[1]==False):
-					next_merge_with_OUT = False
-			else:
-				numMerges=1
-		elif CMI:
-			numMerges=1
-			next_merge_with_OUT = False
-		else:
-			return	#numMerges=0
-
-		count = 0
-		while count<numMerges:
-			CMO = self.canMergeOUT(c_ID)
-			CMI = self.canMergeIN(c_ID)
-			count += 1
-			if next_merge_with_OUT:
-				#Merge-um við OUT tengingu
-				[n_ID,n_B] = CMO
-				if n_B:	#C->N og ekkert flip
-					c_ID = self.merge(c_ID,n_ID,True,True,"")
-					if count<numMerges:
-						next_merge_with_OUT = False
-						CMI = self.canMergeIN(c_ID)
-						#assert(CMI)
-					continue
-				else:	#C->twin(N) og flippum
-					c_ID = self.merge(c_ID,n_ID,True,False,"A")
-					if count<numMerges:
-						next_merge_with_OUT = True
-						CMO = self.canMergeOUT(c_ID)
-						#assert(CMO)
-					continue
-			else:
-				#Merge-um við IN tengingu
-				[n_ID,n_B] = CMI
-				if n_B:	#N->C og ekkert flip
-					c_ID = self.merge(n_ID,c_ID,True,True,"")
-					if count<numMerges:
-						next_merge_with_OUT = True
-						CMO = self.canMergeOUT(c_ID)
-						#assert(CMO)
-					continue
-				else:	#twin(N)->C og flippum
-					c_ID = self.merge(n_ID,c_ID,False,True,"B")
-					if count<numMerges:
-						next_merge_with_OUT = False
-						CMI = self.canMergeIN(c_ID)
-						#assert(CMI)
-					continue
-		CMO = self.canMergeOUT(c_ID)
+			[n_ID,n_B] = CMO
+			if n_B:	#C->N
+				c_ID = self.merge(c_ID,n_ID,True,True,"")
+			else:	#C->twin(N)
+				c_ID = self.merge(c_ID,n_ID,True,False,"A")
+			return c_ID
 		CMI = self.canMergeIN(c_ID)
-		#assert(not CMO), "count="+str(count)+". CMO="+str(CMO)+". numMerges="+str(numMerges)
-		#assert(not CMI), "count="+str(count)+". CMI="+str(CMI)+". numMerges="+str(numMerges)
+		if CMI:
+			[n_ID,n_B] = CMI
+			if n_B:	#N->C
+				c_ID = self.merge(n_ID,c_ID,True,True,"")
+			else:	#twin(N)->C
+				c_ID = self.merge(n_ID,c_ID,False,True,"B")
+			return c_ID
 
 		if self.assertLegal:
 			if not self.isLegalDBG():
@@ -1441,7 +1401,8 @@ class Graph:
 				print "The ID of the contig failing to merge:",c_ID
 				raise Exception("The graph is supposed to be a legal DBG")
 
-	#nýbúinn að einfalda
+		return c_ID		#We also return c_ID if we were unable to merge
+
 	def canMergeOUT(self,c_ID):
 		assert c_ID in self.contigs, "ID must be the ID of a contig in the graph"
 		c_OUT = self.contigs[c_ID][2]
@@ -1969,6 +1930,24 @@ class Graph:
 						potentialFronts.add(x_ID)	#sleppi fyrsta og síðasta (þ.e. sleppi front og end því við geymum þá sér)
 		return list(potentialFronts)
 
+	#-----breytingar--------------------------
+	def markAllInGenome(self,kmersInGenome):
+		#markAllContigsInSetWithNew_R(self,contigSet,new_R,listOfTuples=False)
+		#Uppfærum ratings á öllum contigs sem voru rate-aðir með 0 eða 3
+		#Breytum ekki ratingi á contigs sem voru með 1, 2 eða 4
+		for c_ID, [c,c_IN,c_OUT,c_COV] in self.contigs.iteritems():
+			R = self.degrees[c_ID][2]
+			if R in [0,3]:
+				genomic = True
+				for km in dbg.kmers(c,self.k):
+					km = min(km, dbg.twin(km))
+					if not (km in kmersInGenome):
+						genomic = False
+				if genomic:
+					self.degrees[c_ID][2] = 5
+				else:
+					self.degrees[c_ID][2] = 0
+
 	#----------------------------------------------------
 	#---analyzeAllContigsInCollection and it's helpers:--
 	#----------------------------------------------------
@@ -1989,7 +1968,8 @@ class Graph:
 			c_inD,c_outD = getDegreesOfContig(c_ID,c_IN,c_OUT)
 			self.degrees[c_ID] = [c_inD,c_outD, -1]
 
-	def analyzeAllContigsInCollection(self):
+	#kmersInGenome is a set of all rep_km of k-mers in the genome
+	def analyzeAllContigsInCollection(self,kmersInGenome):
 		#	self.degrees[c_ID] -> [c_inD,c_outD, R]
 		#	R stores info about whether C is part of a collection of contigs which is isolated, a tip or a bubble
 		#	R = -1:	We haven't analyzed C yet
@@ -2035,11 +2015,16 @@ class Graph:
 		#print "We're using MPL="+str(bubMPL)+" for markAllBubbles instead of MPL="+str(MPL)
 		self.markAllBubbles(MPL=bubMPL)
 		
-
 		#Make sure the ratings are as expected after marking all bubbles
 		for c_ID in self.contigs:
 			R = self.degrees[c_ID][2]
 			assert(R in [0,1,2,3,4]), "R="+str(R)+". We should have marked all contigs as part of isolated, tip, bubble or non of the three"
+
+		self.markAllInGenome(kmersInGenome)
+		#Make sure the ratings are as expected
+		for c_ID in self.contigs:
+			R = self.degrees[c_ID][2]
+			assert(R in [0,1,2,4,5]), "R="+str(R)
 
 	#---------------------------------------------------------------
 	#---------------------------------------------------------------

@@ -11,5 +11,5 @@ printf "\n---N50:---\n"
 python N50.py t 31
 printf "\n---percTable:---\n"
 python percTable.py t
-printf "\n---exploreWithBandage:---\n"
-python exploreWithBandage.py t 31
+#printf "\n---exploreWithBandage:---\n"
+#python exploreWithBandage.py t 31

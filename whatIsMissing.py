@@ -21,6 +21,7 @@ def getTotals(G,k,theContigs=-1):
 	tot_bub4 = 0
 	#tot_non = 0
 	tot_genomic = 0
+	tot_partial = 0
 	tot_complex = 0
 	for c_ID in theContigs:
 		[c,c_IN,c_OUT,c_COV] = G.contigs[c_ID]
@@ -38,10 +39,12 @@ def getTotals(G,k,theContigs=-1):
 			tot_bub4 += helpers.cLen(c,k)
 		elif R==5:
 			tot_genomic += helpers.cLen(c,k)
+		elif R==6:
+			tot_partial += helpers.cLen(c,k)
 		else:
 			raise Exception("Illegal value for R")
 	#return [tot_iso,tot_tip,tot_bub3,tot_bub4,tot_non]
-	return [tot_iso,tot_tip,tot_bub4,tot_genomic,tot_complex]
+	return [tot_iso,tot_tip,tot_bub4,tot_genomic,tot_partial,tot_complex]
 
 def totalToPerc(Graph,totals,numKmers=-1):
 	if numKmers==-1:
@@ -53,23 +56,26 @@ def createNewTable(outDir,total_G,total_Gxy,MAC,MSC):
 	gn_tex = helpers.createGraphName_tex(MAC,MSC,inTable=True)
 	tex_newLine = " \\\\\n"
 	
-	[tot_iso,tot_tip,tot_bub4,tot_genomic,tot_complex] = total_G
-	trash_G = tot_iso+tot_tip+tot_bub4
+	[tot_iso,tot_tip,tot_bub4,tot_genomic,tot_partial,tot_complex] = total_G
 	genomic_G = tot_genomic
+	partial_G = tot_partial
 	complex_G = tot_complex
-
-	[tot_iso,tot_tip,tot_bub4,tot_genomic,tot_complex] = total_Gxy
-	trash_Gxy = tot_iso+tot_tip+tot_bub4
+	simple_G = tot_iso+tot_tip+tot_bub4
+	
+	[tot_iso,tot_tip,tot_bub4,tot_genomic,tot_partial,tot_complex] = total_Gxy
 	genomic_Gxy = tot_genomic
+	partial_Gxy = tot_partial
 	complex_Gxy = tot_complex
+	simple_Gxy = tot_iso+tot_tip+tot_bub4
 	
 	outFile = outDir+"/newTable_"+str(MAC)+"_"+str(MSC)+".txt"
 	f = open(outFile, 'w')
 	f.write(" & $G$ & "+str(gn_tex)+tex_newLine)
 	f.write("\\hline\n")
-	f.write("Genomic & "+str(genomic_G)+" & "+str(genomic_Gxy)+tex_newLine)
-	f.write("Trash & "+str(trash_G)+" & "+str(trash_Gxy)+tex_newLine)
-	f.write("Complex & "+str(complex_G)+" & "+str(complex_Gxy)+tex_newLine)
+	f.write("Genomic & "+str(format(genomic_G,','))+" & "+str(format(genomic_Gxy,','))+tex_newLine)
+	f.write("Partial & "+str(format(partial_G,','))+" & "+str(format(partial_Gxy,','))+tex_newLine)
+	f.write("Complex & "+str(format(complex_G,','))+" & "+str(format(complex_Gxy,','))+tex_newLine)
+	f.write("Simple & "+str(format(simple_G,','))+" & "+str(format(simple_Gxy,','))+tex_newLine)
 	f.close()
 
 

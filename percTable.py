@@ -32,7 +32,7 @@ if __name__ == "__main__":
     #texNames geymir nú nöfnin á öllum gröfunum
 
     #Read the data into our matrix
-    numValues = 7
+    #numValues = 7
     matrix = [[]]*numGraphs
     #print matrix
     for lineNr,gn in enumerate(filters):
@@ -42,9 +42,9 @@ if __name__ == "__main__":
             percs[i] = "{0:.1f}".format(p*100)+"\%"
         if texNames[lineNr][-1]=="d":
             texNames[lineNr] = "$G-"+str(texNames[lineNr][1:-1])
-        matrix[lineNr] = [texNames[lineNr]] + [sum(totals)] + percs
+        matrix[lineNr] = [texNames[lineNr]] + [format(sum(totals),',')] + percs
     f = open(outFile, 'w')
-    f.write(" & numKmers & isolated & tips &  secondary & genomic & complex \\\\\n")
+    f.write(" & numKmers & isolated & tips & secondary & genomic & partial & complex \\\\\n")
     f.write("\\hline\n")
 
     for c in range(0,numGraphs):

@@ -611,8 +611,7 @@ def readKmersFromFileToGraph(kmerFile,G):
     f.close()
 
 def writeTotalsAndPercToFile(fileName,totals,percs):
-	#totals = [tot_iso,tot_tip,tot_bub3,tot_bub4,tot_non]           urelt
-    #totals = [tot_iso,tot_tip,tot_bub4,tot_genomic,tot_complex]
+    #totals = [tot_iso,tot_tip,tot_bub4,tot_genomic,tot_partial,tot_complex]
 	f = open(fileName, 'w')
 	assert(len(totals)==len(percs))
 	for i in xrange(len(totals)):

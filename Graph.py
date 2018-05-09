@@ -315,18 +315,6 @@ class Graph:
 		for i, km in enumerate(dbg.kmers(c_twin,self.k)):
 			self.kmers[km]= [ID,i,False]
 
-	"""
-	def deleteKmersFromContig(self,ID,c="-1"):
-		#Before: 	c is a contig with ID ID
-		#After:		all kmers from c and their twins have been deleted from self.kmers
-		if c=="-1":
-			c = self.contigs[ID][0]
-		for km in dbg.kmers(c,self.k):
-			if km in self.kmers:
-				del self.kmers[km]
-				del self.kmers[dbg.twin(km)]
-	"""
-
 	def getID(self):
 		#returns the lowest available ID in the graph. Maintains self.ID as
 		#the lowest available ID
@@ -879,14 +867,6 @@ class Graph:
 
 		if self.assertLegal:
 			assert self.isLegalGraph()
-
-	"""
-	def sortByContigLength(self):
-		for key in sorted(edgeDict.iterkeys()):
-			for value in edgeDict[key]:
-				f.write(value)
-	"""
-
 
 	#--------------------------------------------------------------------------
 	#-------------------changeID_FromTo and helper functions-------------------
@@ -1935,16 +1915,28 @@ class Graph:
 		#markAllContigsInSetWithNew_R(self,contigSet,new_R,listOfTuples=False)
 		#Uppfærum ratings á öllum contigs sem voru rate-aðir með 0 eða 3
 		#Breytum ekki ratingi á contigs sem voru með 1, 2 eða 4
+		#Ný rating:
+		#	0: complex
+		#	5: genomic
+		#	6: partial
 		for c_ID, [c,c_IN,c_OUT,c_COV] in self.contigs.iteritems():
 			R = self.degrees[c_ID][2]
 			if R in [0,3]:
 				genomic = True
+				partial = False
+				#L = helpers.cLen(c,self.k)	#number of k-mers in c
+				#inGenomeCounter = 0
 				for km in dbg.kmers(c,self.k):
 					km = min(km, dbg.twin(km))
 					if not (km in kmersInGenome):
 						genomic = False
+					else:
+						partial = True
 				if genomic:
+					#assert(L==inGenomeCounter)
 					self.degrees[c_ID][2] = 5
+				elif partial:
+					self.degrees[c_ID][2] = 6
 				else:
 					self.degrees[c_ID][2] = 0
 
@@ -2024,7 +2016,7 @@ class Graph:
 		#Make sure the ratings are as expected
 		for c_ID in self.contigs:
 			R = self.degrees[c_ID][2]
-			assert(R in [0,1,2,4,5]), "R="+str(R)
+			assert(R in [0,1,2,4,5,6]), "R="+str(R)
 
 	#---------------------------------------------------------------
 	#---------------------------------------------------------------

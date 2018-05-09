@@ -15,12 +15,13 @@ def createBarChart(outDir,genomeName,MAC,MSC):
     Gd_tot, Gd_per = helpers.readTotalsAndPercFromFile(outDir+"/"+gn+"d_tot_perc.csv")
 
     #Define values for the rows in the bar chart where row1 is the bottom row, row2 is the one one top, etc
-    #[tot_iso,tot_tip,tot_bub4,tot_genomic,tot_complex]
+    #[tot_iso,tot_tip,tot_bub4,tot_genomic,tot_partial,tot_complex]
     row1 = (G_tot[0], Gx_tot[0])    #iso
     row2 = (G_tot[1], Gx_tot[1])    #tip
     row3 = (G_tot[2], Gx_tot[2])    #secondary
     row4 = (G_tot[3], Gx_tot[3])    #genomic
-    row5 = (G_tot[4], Gx_tot[4])    #complex
+    row5 = (G_tot[4], Gx_tot[4])    #genomic
+    row6 = (G_tot[5], Gx_tot[5])    #complex
 
     #Initialize the plot. We start with the left subplot:
     fig, (ax1,ax2) = plt.subplots(1,2)
@@ -48,27 +49,30 @@ def createBarChart(outDir,genomeName,MAC,MSC):
     color_tip =         '#F15A61'
     color_secondary =   '#7AC36A'
     color_genomic =     '#9F66AB'
+    color_partial =     'turquoise'
     color_complex =     '#CF6F57'
 
     #Create the bars:
     ind = [0.1, 0.6]    #the x locations for each bar #[0 1]
     width = 0.3         #the width of the bars
-    ax1.bar(ind, row1, width, color=color_iso,   bottom=0,label="Isolated")
-    ax1.bar(ind, row2, width, color=color_tip,  bottom=row1,label="Tips")
-    ax1.bar(ind, row3, width, color=color_secondary, bottom=[sum(x) for x in zip(row1, row2)],label="Secondary")
-    ax1.bar(ind, row4, width, color=color_genomic,    bottom=[sum(x) for x in zip(row1, row2, row3)],label="Genomic")
-    ax1.bar(ind, row5, width, color=color_complex, bottom=[sum(x) for x in zip(row1, row2, row3, row4)],label="Complex")
+    ax1.bar(ind, row1, width, color=color_iso,       bottom=0,                                                  label="Isolated")
+    ax1.bar(ind, row2, width, color=color_tip,       bottom=row1,                                               label="Tips")
+    ax1.bar(ind, row3, width, color=color_secondary, bottom=[sum(x) for x in zip(row1, row2)],                  label="Secondary")
+    ax1.bar(ind, row4, width, color=color_genomic,   bottom=[sum(x) for x in zip(row1, row2, row3)],            label="Genomic")
+    ax1.bar(ind, row5, width, color=color_partial,   bottom=[sum(x) for x in zip(row1, row2, row3, row4)],      label="Partial")
+    ax1.bar(ind, row6, width, color=color_complex,   bottom=[sum(x) for x in zip(row1, row2, row3, row4, row5)],label="Complex")
     
     #Now the right subplot:
 
     #Create the bars:
     ind = [0.1]         #the x locations for each bar #[0 1]
     width = 0.3         #the width of the bars
-    ax2.bar(ind, Gd_tot[0], width, color=color_iso,  bottom=0,label="Isolated")
-    ax2.bar(ind, Gd_tot[1], width, color=color_tip,  bottom=Gd_tot[0],label="Tips")
+    ax2.bar(ind, Gd_tot[0], width, color=color_iso,       bottom=0,               label="Isolated")
+    ax2.bar(ind, Gd_tot[1], width, color=color_tip,       bottom=Gd_tot[0],       label="Tips")
     ax2.bar(ind, Gd_tot[2], width, color=color_secondary, bottom=sum(Gd_tot[0:2]),label="Secondary")
-    ax2.bar(ind, Gd_tot[3], width, color=color_genomic,    bottom=sum(Gd_tot[0:3]),label="Genomic")
-    ax2.bar(ind, Gd_tot[4], width, color=color_complex, bottom=sum(Gd_tot[0:4]),label="Complex")
+    ax2.bar(ind, Gd_tot[3], width, color=color_genomic,   bottom=sum(Gd_tot[0:3]),label="Genomic")
+    ax2.bar(ind, Gd_tot[4], width, color=color_partial,   bottom=sum(Gd_tot[0:4]),label="Partial")
+    ax2.bar(ind, Gd_tot[5], width, color=color_complex,   bottom=sum(Gd_tot[0:5]),label="Complex")
     
     #Labels and legend
     ax1.set_xlim(0,1,1)

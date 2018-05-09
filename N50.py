@@ -64,33 +64,12 @@ def printN50ToFile(filters,N50L,L50L,outDir):
     #for i in range(0,len(MCL)):
     for i, (MAC,MSC) in enumerate(filters):
         gn = helpers.createGraphName_tex(MAC,MSC,True)
-        f.write(gn+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
+        f.write(gn+" & "+format(N50L[i],',')+" & "+format(L50L[i],',')+" \\\\\n")
         #if MCL[i]==-1:
         #    f.write("$\\infty$"+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
         #else:
         #    f.write(str(MCL[i])+" & "+str(N50L[i])+" & "+str(L50L[i])+" \\\\\n")
     f.close()
-
-"""
-def selectGenome(genomeName):
-	if genomeName=="t":
-		filters = [ \
-        (5,float('inf')), \
-		(10,float('inf')), \
-		(15,float('inf')), \
-		(20,float('inf')), \
-		(30,float('inf')), \
-		(float('inf'),float('inf'))]
-	elif genomeName=="sa":
-		filters = [ \
-        (15,float('inf')), \
-		(20,float('inf')), \
-		(30,float('inf')), \
-		(float('inf'),float('inf'))]
-	else:
-		raise Exception("The genomeName must be either 't' or 'sa'!")
-	return filters
-"""
 
 if __name__ == "__main__":
     #Inputs

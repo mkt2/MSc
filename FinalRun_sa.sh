@@ -1,8 +1,8 @@
 #!/bin/bash
 #coding:utf8
-python preprocessInput.py sa 31
-printf "\n---BFAdder:---\n"
-python BFAdder.py sa
+#python preprocessInput.py sa 31
+#printf "\n---BFAdder:---\n"
+#python BFAdder.py sa
 printf "\n---BFAdderFigures:---\n"
 python BFAdderFigures.py sa
 printf "\n---whatIsMissing:---\n"

@@ -136,6 +136,7 @@ def createFigure(covDict,genomeLen,numReadsPerFile,numKmersPerRead,genome_dict,M
     ax1.get_yaxis().set_major_formatter(
     mpl.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
 
+
     #Set axis labels and legends:
     ax1.set_title("#k-mers / cov")
     ax2.set_title("-log(1-Fraction) / cov")
@@ -146,7 +147,7 @@ def createFigure(covDict,genomeLen,numReadsPerFile,numKmersPerRead,genome_dict,M
     ax1.grid()
     ax2.grid()
     ax1.legend(loc='upper left', prop={'size': 9})#, bbox_to_anchor=(1.2, -0.05))
-    ax2.legend(loc='lower right', prop={'size': 9})#, bbox_to_anchor=(1.1, 0))
+    ax2.legend(loc='upper left', prop={'size': 9})#, bbox_to_anchor=(1.1, 0))
     
     plt.tight_layout()
     #plt.rc('text', usetex=True)
